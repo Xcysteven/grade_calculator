@@ -1,15 +1,15 @@
-// src/content/index.ts
 import type { Assignment } from '../types';
 
-console.log("UCSD Grade Dashboard: Content Script Active");
+console.log("🚀 UCSD Grade Dashboard: Content Script Active");
 
 function scrapeGradescope() {
-  const rows = document.querySelectorAll('tbody tr');
+  // 1. Get the Course Name
+  const titleElement = document.querySelector('.courseHeader--title, h1');
+  const courseName = titleElement?.textContent?.trim() || "Unknown Course";
 
-  if (rows.length === 0) {
-    console.log("No assignment rows found.");
-    return;
-  }
+  // 2. Find the rows
+  const rows = document.querySelectorAll('tbody tr');
+  if (rows.length === 0) return;
 
   const assignments: Assignment[] = [];
 
@@ -18,14 +18,10 @@ function scrapeGradescope() {
     const scoreCell = row.querySelector('.submissionStatus') as HTMLElement;
 
     if (nameCell && scoreCell) {
-      const name = nameCell.innerText.trim() || "Unknown Assignment";
-      const scoreText = scoreCell.innerText.trim(); 
+      const name = nameCell.innerText.trim();
+      const scoreText = scoreCell.innerText.trim();
       
-      console.log(`Row ${index}: Found "${name}" with score text "${scoreText}"`);
-
-      // 3. Parse the score
       const parts = scoreText.split('/');
-      
       if (parts.length === 2) {
         const score = parseFloat(parts[0]);
         const maxScore = parseFloat(parts[1]);
@@ -42,12 +38,15 @@ function scrapeGradescope() {
     }
   });
 
-  // 4. Final Report
+  // 3. CRITICAL STEP: Save to Chrome Storage
   if (assignments.length > 0) {
-    console.log("✅ SUCCESS! Scraped Assignments:", assignments);
-    // Next step: We will save 'assignments' to Chrome Storage here.
-  } else {
-    console.log("⚠️ Found rows, but couldn't extract numbers. Check the logs above!");
+    console.log(`✅ Scraped ${assignments.length} grades for ${courseName}`);
+
+    chrome.storage.local.set({
+      [courseName]: assignments
+    }, () => {
+      console.log("💾 Data saved to Chrome Storage!");
+    });
   }
 }
 
