@@ -8,7 +8,9 @@ let scrapeTimeout: number | undefined;
 function scrapeGradescope() {
   // 1. Get the Course Name
   const titleElement = document.querySelector('.courseHeader--title, h1');
-  const courseName = titleElement?.textContent?.trim() || "Unknown Course";
+  const baseCourseName = titleElement?.textContent?.trim() || "Unknown Course";
+  const termName = detectCourseTerm(titleElement);
+  const courseName = termName ? `${baseCourseName} ${termName}` : baseCourseName;
 
   // 2. Find the rows
   const rows = document.querySelectorAll('tbody tr');
@@ -57,6 +59,35 @@ function scrapeGradescope() {
       console.log("💾 Data saved to Chrome Storage!");
     });
   }
+}
+
+function detectCourseTerm(titleElement: Element | null): string | null {
+  const termPattern = /\b(Fall|Winter|Spring|Summer)\s+20\d{2}\b/i;
+  const titleText = titleElement?.textContent ?? '';
+
+  if (termPattern.test(titleText)) {
+    return titleText.match(termPattern)?.[0] ?? null;
+  }
+
+  const headerText = titleElement
+    ?.closest('.courseHeader, header, main')
+    ?.textContent
+    ?.replace(/\s+/g, ' ');
+  const headerMatch = headerText?.match(termPattern)?.[0];
+
+  if (headerMatch) {
+    return headerMatch;
+  }
+
+  const nearbyText = [
+    titleElement?.nextElementSibling?.textContent,
+    titleElement?.parentElement?.textContent,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ');
+
+  return nearbyText.match(termPattern)?.[0] ?? null;
 }
 
 function scheduleScrape(delayMs = 250): void {

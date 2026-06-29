@@ -101,7 +101,7 @@ function parseWeightedRows(lines: string[]): ParsedWeightedRow[] {
 }
 
 function parseKnownComponentRows(lines: string[]): ParsedWeightedRow[] {
-  const componentPattern = /(Weekly Learning\/Practice Opportunities|Weekly Learning\/Practice|Learning\/Practice Opportunities|Learning\/Practice|Project Checkpoints|Final Exam|Midterm Exam|Skill Tests|Skill Test|Midterms|Exams|Homework|Assignments|Projects|Labs|Quizzes|Discussions|Attendance|Participation|Reading)\s+(\d+(?:\.\d+)?)%/gi;
+  const componentPattern = /(Weekly Learning\/Practice Opportunities|Weekly Learning\/Practice|Learning\/Practice Opportunities|Learning\/Practice|Project Checkpoints|Homework Assignments|Lab Assignments|Midterm Project|Final Project|Project\s+\d+|Final Exam|Midterm Exam|Skill Tests|Skill Test|Midterms|Exams|Homework|Assignments|Projects|Labs|Quizzes|Discussions|Attendance|Participation|Reading)\s+(\d+(?:\.\d+)?)%/gi;
   const tableLine = lines.find((line) => /component\s+weight/i.test(line));
 
   if (!tableLine) {
@@ -161,6 +161,12 @@ function normalizeCategoryName(rawName: string): string | null {
   if (lowerName.includes('learning/practice') || lowerName.includes('practice opportunities')) {
     return 'Weekly Learning/Practice';
   }
+  if (lowerName.includes('final project')) return 'Final Project';
+  if (lowerName.includes('midterm project')) return 'Midterm Project';
+  if (lowerName.includes('homework assignment')) return 'Homework';
+  if (lowerName.includes('lab assignment')) return 'Labs';
+  const projectNumberMatch = lowerName.match(/\bproject\s*(\d+)\b/);
+  if (projectNumberMatch) return `Project ${projectNumberMatch[1]}`;
   if (lowerName.includes('final exam')) return 'Final';
   if (lowerName.includes('midterm')) return 'Midterms';
   if (lowerName.includes('exam')) return 'Exams';
@@ -188,11 +194,22 @@ function buildAssignmentMatchers(categoryName: string, rawName: string): string[
     Final: ['final exam', 'final'],
     Homework: ['homework', 'hw'],
     Labs: ['lab'],
+    'Midterm Project': ['midterm project'],
     Midterms: ['midterm'],
     Projects: ['project'],
     Quizzes: ['quiz'],
     Reading: ['reading'],
-    Participation: ['participation', 'campuswire', 'office hours'],
+    Participation: [
+      'attendance',
+      'campuswire',
+      'discussion',
+      'office hours',
+      'participation',
+      'pretest',
+      'sets',
+      'survey',
+      'syllabus check',
+    ],
     'Skill Tests': ['skill test'],
     'Weekly Learning/Practice': [
       'assignment',
@@ -208,9 +225,34 @@ function buildAssignmentMatchers(categoryName: string, rawName: string): string[
     ],
   };
   const rawMatcher = rawName.toLowerCase().replace(/\s+/g, ' ').trim();
-  const matchers = [rawMatcher, ...(baseMatchers[categoryName] ?? [])].filter(Boolean);
+  const dynamicMatchers = getDynamicAssignmentMatchers(categoryName);
+  const matchers = [
+    rawMatcher,
+    ...dynamicMatchers,
+    ...(baseMatchers[categoryName] ?? []),
+  ].filter(Boolean);
 
   return Array.from(new Set(matchers));
+}
+
+function getDynamicAssignmentMatchers(categoryName: string): string[] {
+  const projectNumberMatch = categoryName.match(/^Project (\d+)$/);
+
+  if (projectNumberMatch) {
+    const projectNumber = projectNumberMatch[1];
+    return [
+      `project ${projectNumber}`,
+      `project${projectNumber}`,
+      `project_${projectNumber}`,
+      `project-${projectNumber}`,
+    ];
+  }
+
+  if (categoryName === 'Final Project') {
+    return ['final project'];
+  }
+
+  return [];
 }
 
 function detectDropLowestCount(text: string): number | undefined {

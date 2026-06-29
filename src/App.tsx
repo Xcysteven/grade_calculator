@@ -29,6 +29,7 @@ function App() {
   const [customAssignments, setCustomAssignments] = useState<Assignment[]>([]);
   const [manualPolicyUrl, setManualPolicyUrl] = useState('');
   const [policyResult, setPolicyResult] = useState<CoursePolicyResult | null>(null);
+  const [policyCourse, setPolicyCourse] = useState('');
   const [policyLoading, setPolicyLoading] = useState(false);
 
   useEffect(() => {
@@ -57,14 +58,49 @@ function App() {
     };
   }, [isFullDashboard]);
 
+  useEffect(() => {
+    if (!selectedCourse || !courses[selectedCourse]) {
+      return;
+    }
+
+    if (getKnownCourseScheme(selectedCourse)) {
+      return;
+    }
+
+    let canceled = false;
+    queueMicrotask(() => {
+      if (!canceled) {
+        setPolicyLoading(true);
+      }
+    });
+
+    discoverCoursePolicy(selectedCourse)
+      .then((result) => {
+        if (!canceled) {
+          setPolicyResult(result);
+          setPolicyCourse(selectedCourse);
+        }
+      })
+      .finally(() => {
+        if (!canceled) {
+          setPolicyLoading(false);
+        }
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, [courses, selectedCourse]);
+
   // Helper to render the currently selected course
   const renderSelectedCourse = () => {
     if (!selectedCourse || !courses[selectedCourse]) return null;
 
     const assignments = courses[selectedCourse];
     const knownScheme = getKnownCourseScheme(selectedCourse);
-    const detectedScheme = policyResult?.scheme
-      ? mergePolicySchemeWithKnownScheme(policyResult.scheme, knownScheme)
+    const currentPolicyResult = policyCourse === selectedCourse ? policyResult : null;
+    const detectedScheme = currentPolicyResult?.scheme
+      ? mergePolicySchemeWithKnownScheme(currentPolicyResult.scheme, knownScheme)
       : undefined;
     const scheme = detectedScheme ?? knownScheme;
     const simulatedAssignments = [...assignments, ...customAssignments].map((assignment) => ({
@@ -156,6 +192,7 @@ function App() {
                 setCustomCategories([]);
                 setCustomAssignments([]);
                 setPolicyResult(null);
+                setPolicyCourse('');
               }}
             >
               Reset simulation
@@ -164,7 +201,9 @@ function App() {
         </div>
         {isEqualWeightFallback && (
           <div className="scheme-warning">
-            No course policy loaded. Current weights are evenly divided estimates.
+            {policyLoading
+              ? 'Detecting course policy. Current weights are temporary evenly divided estimates.'
+              : 'No course policy loaded. Current weights are evenly divided estimates.'}
           </div>
         )}
         {isFullDashboard && (
@@ -173,7 +212,13 @@ function App() {
             className="policy-form"
             onSubmit={(event) => {
               event.preventDefault();
-              void detectPolicy(selectedCourse, manualPolicyUrl, setPolicyLoading, setPolicyResult);
+              void detectPolicy(
+                selectedCourse,
+                manualPolicyUrl,
+                setPolicyLoading,
+                setPolicyResult,
+                setPolicyCourse,
+              );
             }}
           >
             <input
@@ -185,22 +230,22 @@ function App() {
               {policyLoading ? 'Detecting...' : 'Detect policy'}
             </button>
           </form>
-          {policyResult && (
+          {currentPolicyResult && (
             <div className="policy-status">
               <strong>
-                {policyResult.scheme ? 'Detected policy' : 'Policy not detected'}
+                {currentPolicyResult.scheme ? 'Detected policy' : 'Policy not detected'}
               </strong>
               <span>
-                {policyResult.url ?? 'No matching policy URL'} | confidence {(policyResult.confidence * 100).toFixed(0)}%
+                {currentPolicyResult.url ?? 'No matching policy URL'} | confidence {(currentPolicyResult.confidence * 100).toFixed(0)}%
               </span>
-              {policyResult.warnings.slice(0, 3).map((warning) => (
+              {currentPolicyResult.warnings.slice(0, 3).map((warning) => (
                 <p key={warning}>{warning}</p>
               ))}
-              {policyResult.attemptedUrls.length > 0 && (
+              {currentPolicyResult.attemptedUrls.length > 0 && (
                 <details>
                   <summary>Attempted URLs</summary>
                   <ul>
-                    {policyResult.attemptedUrls.slice(0, 12).map((url) => (
+                    {currentPolicyResult.attemptedUrls.slice(0, 12).map((url) => (
                       <li key={url}>{url}</li>
                     ))}
                   </ul>
@@ -447,8 +492,10 @@ async function detectPolicy(
   manualPolicyUrl: string,
   setPolicyLoading: Dispatch<SetStateAction<boolean>>,
   setPolicyResult: Dispatch<SetStateAction<CoursePolicyResult | null>>,
+  setPolicyCourse: Dispatch<SetStateAction<string>>,
 ): Promise<void> {
   setPolicyLoading(true);
+  setPolicyCourse(selectedCourse);
 
   try {
     const result = await discoverCoursePolicy(selectedCourse, manualPolicyUrl.trim() || undefined);
