@@ -94,13 +94,14 @@ function parseWeightedRows(lines: string[]): ParsedWeightedRow[] {
       rule: {
         weight: Number(rawWeight) / 100,
         dropLowest: detectDropLowestCount(`${rawName} ${notes}`),
+        assignmentMatchers: buildAssignmentMatchers(categoryName, rawName),
       },
     }];
   });
 }
 
 function parseKnownComponentRows(lines: string[]): ParsedWeightedRow[] {
-  const componentPattern = /(Project Checkpoints|Midterm Exam|Final Exam|Homework|Projects|Labs|Discussions|Attendance)\s+(\d+(?:\.\d+)?)%/gi;
+  const componentPattern = /(Project Checkpoints|Final Exam|Midterm Exam|Midterms|Exams|Homework|Assignments|Projects|Labs|Quizzes|Discussions|Attendance|Participation|Reading)\s+(\d+(?:\.\d+)?)%/gi;
   const tableLine = lines.find((line) => /component\s+weight/i.test(line));
 
   if (!tableLine) {
@@ -125,6 +126,7 @@ function parseKnownComponentRows(lines: string[]): ParsedWeightedRow[] {
       rule: {
         weight: Number(rawWeight) / 100,
         dropLowest: detectDropLowestCount(`${rawName} ${notes}`),
+        assignmentMatchers: buildAssignmentMatchers(categoryName, rawName),
       },
     }];
   });
@@ -155,15 +157,41 @@ function normalizeCategoryName(rawName: string): string | null {
   const lowerName = rawName.toLowerCase();
 
   if (lowerName.includes('checkpoint')) return 'Checkpoints';
-  if (lowerName.includes('final')) return 'Final';
-  if (lowerName.includes('midterm') || lowerName.includes('exam')) return 'Midterms';
+  if (lowerName.includes('final exam')) return 'Final';
+  if (lowerName.includes('midterm')) return 'Midterms';
+  if (lowerName.includes('exam')) return 'Exams';
   if (lowerName.includes('project')) return 'Projects';
   if (lowerName.includes('lab')) return 'Labs';
+  if (lowerName.includes('quiz')) return 'Quizzes';
   if (lowerName.includes('homework') || lowerName.includes('hw')) return 'Homework';
+  if (lowerName.includes('assignment')) return 'Assignments';
   if (lowerName.includes('discussion')) return 'Discussions';
-  if (lowerName.includes('attendance')) return 'Attendance';
+  if (lowerName.includes('attendance') || lowerName.includes('participation')) return 'Attendance';
+  if (lowerName.includes('reading')) return 'Reading';
+  if (lowerName.trim() === 'final') return 'Final';
 
   return null;
+}
+
+function buildAssignmentMatchers(categoryName: string, rawName: string): string[] {
+  const baseMatchers: Record<string, string[]> = {
+    Assignments: ['assignment'],
+    Attendance: ['attendance', 'participation'],
+    Checkpoints: ['checkpoint'],
+    Discussions: ['discussion'],
+    Exams: ['exam', 'test'],
+    Final: ['final exam', 'final'],
+    Homework: ['homework', 'hw'],
+    Labs: ['lab'],
+    Midterms: ['midterm'],
+    Projects: ['project'],
+    Quizzes: ['quiz'],
+    Reading: ['reading'],
+  };
+  const rawMatcher = rawName.toLowerCase().replace(/\s+/g, ' ').trim();
+  const matchers = [rawMatcher, ...(baseMatchers[categoryName] ?? [])].filter(Boolean);
+
+  return Array.from(new Set(matchers));
 }
 
 function detectDropLowestCount(text: string): number | undefined {

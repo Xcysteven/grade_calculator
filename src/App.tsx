@@ -5,6 +5,7 @@ import {
   calculateGrade,
   groupAssignmentsByCategory,
 } from './calculator';
+import { discoverCoursePolicy, type CoursePolicyResult } from './coursePolicy';
 import { getKnownCourseScheme } from './courseSchemes';
 import type { Assignment, GradingScheme, WeightedStrategy } from './types';
 
@@ -26,6 +27,9 @@ function App() {
   const [weightOverrides, setWeightOverrides] = useState<WeightOverrides>({});
   const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [customAssignments, setCustomAssignments] = useState<Assignment[]>([]);
+  const [manualPolicyUrl, setManualPolicyUrl] = useState('');
+  const [policyResult, setPolicyResult] = useState<CoursePolicyResult | null>(null);
+  const [policyLoading, setPolicyLoading] = useState(false);
 
   useEffect(() => {
     if (!canUseChromeStorage) {
@@ -58,7 +62,11 @@ function App() {
     if (!selectedCourse || !courses[selectedCourse]) return null;
 
     const assignments = courses[selectedCourse];
-    const scheme = getKnownCourseScheme(selectedCourse);
+    const knownScheme = getKnownCourseScheme(selectedCourse);
+    const detectedScheme = policyResult?.scheme
+      ? mergePolicySchemeWithKnownScheme(policyResult.scheme, knownScheme)
+      : undefined;
+    const scheme = detectedScheme ?? knownScheme;
     const simulatedAssignments = [...assignments, ...customAssignments].map((assignment) => ({
       ...assignment,
       score: scoreOverrides[assignment.id]?.score ?? assignment.score,
@@ -146,6 +154,7 @@ function App() {
                 setWeightOverrides({});
                 setCustomCategories([]);
                 setCustomAssignments([]);
+                setPolicyResult(null);
               }}
             >
               Reset simulation
@@ -154,6 +163,35 @@ function App() {
         </div>
         {isFullDashboard && (
           <>
+          <form
+            className="policy-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void detectPolicy(selectedCourse, manualPolicyUrl, setPolicyLoading, setPolicyResult);
+            }}
+          >
+            <input
+              value={manualPolicyUrl}
+              onChange={(event) => setManualPolicyUrl(event.target.value)}
+              placeholder="Optional syllabus URL"
+            />
+            <button type="submit" disabled={policyLoading}>
+              {policyLoading ? 'Detecting...' : 'Detect policy'}
+            </button>
+          </form>
+          {policyResult && (
+            <div className="policy-status">
+              <strong>
+                {policyResult.scheme ? 'Detected policy' : 'Policy not detected'}
+              </strong>
+              <span>
+                {policyResult.url ?? 'No matching policy URL'} | confidence {(policyResult.confidence * 100).toFixed(0)}%
+              </span>
+              {policyResult.warnings.slice(0, 3).map((warning) => (
+                <p key={warning}>{warning}</p>
+              ))}
+            </div>
+          )}
           <form
             className="add-category-form"
             onSubmit={(event) => {
@@ -354,6 +392,7 @@ function App() {
               setWeightOverrides({});
               setCustomCategories([]);
               setCustomAssignments([]);
+              setPolicyResult(null);
             }}
           >
             {Object.keys(courses).map(name => (
@@ -385,6 +424,49 @@ function openFullDashboard(): void {
     : fullDashboardPath;
 
   window.open(fullDashboardUrl, '_blank');
+}
+
+async function detectPolicy(
+  selectedCourse: string,
+  manualPolicyUrl: string,
+  setPolicyLoading: Dispatch<SetStateAction<boolean>>,
+  setPolicyResult: Dispatch<SetStateAction<CoursePolicyResult | null>>,
+): Promise<void> {
+  setPolicyLoading(true);
+
+  try {
+    const result = await discoverCoursePolicy(selectedCourse, manualPolicyUrl.trim() || undefined);
+    setPolicyResult(result);
+  } finally {
+    setPolicyLoading(false);
+  }
+}
+
+function mergePolicySchemeWithKnownScheme(
+  policyScheme: GradingScheme,
+  knownScheme?: GradingScheme,
+): GradingScheme {
+  if (policyScheme.type !== 'WEIGHTED' || knownScheme?.type !== 'WEIGHTED') {
+    return policyScheme;
+  }
+
+  const rules = Object.fromEntries(
+    Object.entries(policyScheme.rules).map(([categoryName, policyRule]) => [
+      categoryName,
+      {
+        ...knownScheme.rules[categoryName],
+        ...policyRule,
+        assignmentMatchers: knownScheme.rules[categoryName]?.assignmentMatchers
+          ?? policyRule.assignmentMatchers,
+      },
+    ]),
+  ) as WeightedStrategy['rules'];
+
+  return {
+    ...policyScheme,
+    rules,
+    redemptions: policyScheme.redemptions ?? knownScheme.redemptions,
+  };
 }
 
 function buildSimulationScheme(

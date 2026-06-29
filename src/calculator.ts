@@ -31,9 +31,12 @@ export function categorizeAssignmentName(name: string): string {
   if (lowerName.includes('lab')) return 'Labs';
   if (lowerName.includes('exam')) return 'Midterms';
   if (lowerName.includes('homework') || lowerName.includes('hw')) return 'Homework';
-  if (lowerName.includes('quiz') || lowerName.includes('test')) return 'Homework';
+  if (lowerName.includes('quiz')) return 'Quizzes';
+  if (lowerName.includes('test')) return 'Exams';
+  if (lowerName.includes('assignment')) return 'Assignments';
   if (lowerName.includes('discussion')) return 'Discussions';
-  if (lowerName.includes('attendance')) return 'Attendance';
+  if (lowerName.includes('attendance') || lowerName.includes('participation')) return 'Attendance';
+  if (lowerName.includes('reading')) return 'Reading';
 
   return 'Other';
 }

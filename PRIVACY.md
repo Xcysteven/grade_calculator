@@ -4,11 +4,11 @@ UCSD Grade Dashboard is designed to run locally in the user's browser.
 
 ## Data Collected
 
-The extension reads assignment names, scores, and maximum scores from supported Gradescope pages. It may also store local what-if simulation data in the future.
+The extension reads assignment names, scores, and maximum scores from supported Gradescope pages. It also reads public course repository metadata and public course policy pages when the user asks the dashboard to detect a grading policy.
 
 ## How Data Is Used
 
-Grade data is used to calculate estimated course grades and display local what-if simulations.
+Grade data is used to calculate estimated course grades and display local what-if simulations. Public course repository metadata is used to find likely course websites. Public course policy text is used to detect grading categories and category weights.
 
 ## Data Storage
 
@@ -20,7 +20,7 @@ The extension does not sell grade data and does not share grade data with third 
 
 ## Network Requests
 
-The current extension reads Gradescope pages through a content script. Course policy scraping is experimental and should only fetch public course policy pages when implemented.
+The extension reads Gradescope pages through a content script. When policy detection is used, the extension may fetch public metadata from `api.github.com`, public course files from `raw.githubusercontent.com/dsc-courses`, and public DSC course websites such as `dsc80.com`, `dsc100.org`, or `dsc-courses.github.io`.
 
 ## User Control
 

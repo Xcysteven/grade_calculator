@@ -255,6 +255,74 @@ h1 {
   padding-right: 2px;
 }
 
+.policy-form {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) 140px;
+  gap: 8px;
+  align-items: center;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.policy-form input,
+.policy-form button,
+.add-category-form input,
+.add-category-form button {
+  min-width: 0;
+}
+
+.policy-form input,
+.policy-form button {
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #fff;
+  color: #334155;
+  font: inherit;
+  font-size: 0.78rem;
+}
+
+.policy-form input {
+  padding: 8px 10px;
+}
+
+.policy-form button {
+  padding: 8px 10px;
+  color: #1d4ed8;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.policy-form button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.policy-status {
+  display: grid;
+  gap: 3px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.76rem;
+}
+
+.policy-status strong {
+  color: #334155;
+}
+
+.policy-status span {
+  color: #64748b;
+}
+
+.policy-status p {
+  margin: 0;
+  color: #92400e;
+}
+
 .add-category-form {
   display: grid;
   grid-template-columns: minmax(180px, 260px) 120px auto;
