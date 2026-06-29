@@ -323,6 +323,37 @@ h1 {
   color: #92400e;
 }
 
+.policy-status details {
+  margin-top: 4px;
+}
+
+.policy-status summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.policy-status ul {
+  display: grid;
+  gap: 3px;
+  margin: 5px 0 0;
+  padding-left: 16px;
+}
+
+.policy-status li {
+  overflow-wrap: anywhere;
+}
+
+.scheme-warning {
+  margin-top: 12px;
+  padding: 9px 10px;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
 .add-category-form {
   display: grid;
   grid-template-columns: minmax(180px, 260px) 120px auto;

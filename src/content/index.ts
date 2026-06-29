@@ -2,6 +2,9 @@ import type { Assignment } from '../types';
 
 console.log("🚀 UCSD Grade Dashboard: Content Script Active");
 
+let lastSavedFingerprint = '';
+let scrapeTimeout: number | undefined;
+
 function scrapeGradescope() {
   // 1. Get the Course Name
   const titleElement = document.querySelector('.courseHeader--title, h1');
@@ -40,6 +43,12 @@ function scrapeGradescope() {
 
   // 3. CRITICAL STEP: Save to Chrome Storage
   if (assignments.length > 0) {
+    const fingerprint = JSON.stringify({ courseName, assignments });
+    if (fingerprint === lastSavedFingerprint) {
+      return;
+    }
+
+    lastSavedFingerprint = fingerprint;
     console.log(`✅ Scraped ${assignments.length} grades for ${courseName}`);
 
     chrome.storage.local.set({
@@ -50,5 +59,19 @@ function scrapeGradescope() {
   }
 }
 
-// Run the scraper
+function scheduleScrape(delayMs = 250): void {
+  window.clearTimeout(scrapeTimeout);
+  scrapeTimeout = window.setTimeout(scrapeGradescope, delayMs);
+}
+
 scrapeGradescope();
+[500, 1500, 3000].forEach((delayMs) => {
+  window.setTimeout(scrapeGradescope, delayMs);
+});
+
+const observer = new MutationObserver(() => scheduleScrape());
+observer.observe(document.body, {
+  childList: true,
+  subtree: true,
+  characterData: true,
+});

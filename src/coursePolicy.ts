@@ -15,7 +15,9 @@ type DscCourseRepo = {
 };
 
 export function extractDscCourseCode(courseName: string): string | null {
-  const match = courseName.toLowerCase().match(/\bdsc\s*(\d{1,3}[a-z]?)\b/);
+  const match = courseName
+    .toLowerCase()
+    .match(/(?:^|[^a-z0-9])dsc[_\s-]*(\d{1,3}[a-z]?)(?=$|[^a-z0-9])/);
   return match ? `dsc${match[1]}` : null;
 }
 
@@ -152,7 +154,7 @@ async function getGithubCoursePolicyUrls(
 }
 
 async function fetchDscCourseRepos(courseCode: string): Promise<DscCourseRepo[]> {
-  const pages = [1, 2];
+  const pages = [1, 2, 3, 4, 5];
   const repoPages = await Promise.all(pages.map(async (page) => {
     const response = await fetch(
       `https://api.github.com/orgs/dsc-courses/repos?per_page=100&page=${page}`,
@@ -249,8 +251,10 @@ function scoreRepoMatch(repo: DscCourseRepo, courseName: string): number {
 
 function extractTermHints(courseName: string): string[] {
   const lowerCourseName = courseName.toLowerCase();
-  const year = lowerCourseName.match(/\b(20\d{2})\b/)?.[1];
-  const termCode = getTermCode(lowerCourseName);
+  const compactTermMatch = lowerCourseName.match(/(?:^|[^a-z0-9])(fa|wi|sp|su)[_-]?(\d{2})(?=$|[^a-z0-9])/);
+  const year = lowerCourseName.match(/(?:^|[^a-z0-9])(20\d{2})(?=$|[^a-z0-9])/)?.[1]
+    ?? (compactTermMatch ? `20${compactTermMatch[2]}` : null);
+  const termCode = compactTermMatch?.[1] ?? getTermCode(lowerCourseName);
 
   if (!year || !termCode) {
     return [];

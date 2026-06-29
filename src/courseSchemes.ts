@@ -20,10 +20,61 @@ const DSC80_SCHEME: GradingScheme = {
   ],
 };
 
+const DSC20_SCHEME: GradingScheme = {
+  type: 'WEIGHTED',
+  rules: {
+    'Skill Tests': {
+      weight: 0.55,
+      assignmentMatchers: ['skill test', 'exam', 'midterm', 'final'],
+    },
+    Participation: {
+      weight: 0.15,
+      assignmentMatchers: ['participation', 'campuswire', 'office hours'],
+    },
+    'Weekly Learning/Practice': {
+      weight: 0.3,
+      assignmentMatchers: [
+        'checkpoint',
+        'homework',
+        'hw',
+        'lab',
+        'lecture quiz',
+        'practice',
+        'project',
+        'quiz',
+        'reading',
+      ],
+    },
+  },
+  redemptions: [
+    {
+      id: 'skill-test-redemption',
+      name: 'Final skill test can redeem earlier skill tests',
+      sourceCategory: 'Skill Tests',
+      targetCategory: 'Skill Tests',
+      conditionType: 'REPLACE_IF_HIGHER',
+    },
+  ],
+};
+
 export function getKnownCourseScheme(courseName: string): GradingScheme | undefined {
-  if (/\bdsc\s*80\b/i.test(courseName)) {
+  const courseCode = extractDscCourseCode(courseName);
+
+  if (courseCode === 'dsc20') {
+    return DSC20_SCHEME;
+  }
+
+  if (courseCode === 'dsc80') {
     return DSC80_SCHEME;
   }
 
   return undefined;
+}
+
+function extractDscCourseCode(courseName: string): string | null {
+  const match = courseName
+    .toLowerCase()
+    .match(/(?:^|[^a-z0-9])dsc[_\s-]*(\d{1,3}[a-z]?)(?=$|[^a-z0-9])/);
+
+  return match ? `dsc${match[1]}` : null;
 }

@@ -76,7 +76,7 @@ function parseWeightedRows(lines: string[]): ParsedWeightedRow[] {
       return [];
     }
 
-    const match = line.match(/^(.+?)\s+(\d+(?:\.\d+)?)%\s*(.*)$/);
+    const match = line.match(/^(.+?)\s+\(?(\d+(?:\.\d+)?)%\)?\s*(.*)$/);
     if (!match) {
       return [];
     }
@@ -101,7 +101,7 @@ function parseWeightedRows(lines: string[]): ParsedWeightedRow[] {
 }
 
 function parseKnownComponentRows(lines: string[]): ParsedWeightedRow[] {
-  const componentPattern = /(Project Checkpoints|Final Exam|Midterm Exam|Midterms|Exams|Homework|Assignments|Projects|Labs|Quizzes|Discussions|Attendance|Participation|Reading)\s+(\d+(?:\.\d+)?)%/gi;
+  const componentPattern = /(Weekly Learning\/Practice Opportunities|Weekly Learning\/Practice|Learning\/Practice Opportunities|Learning\/Practice|Project Checkpoints|Final Exam|Midterm Exam|Skill Tests|Skill Test|Midterms|Exams|Homework|Assignments|Projects|Labs|Quizzes|Discussions|Attendance|Participation|Reading)\s+(\d+(?:\.\d+)?)%/gi;
   const tableLine = lines.find((line) => /component\s+weight/i.test(line));
 
   if (!tableLine) {
@@ -157,6 +157,10 @@ function normalizeCategoryName(rawName: string): string | null {
   const lowerName = rawName.toLowerCase();
 
   if (lowerName.includes('checkpoint')) return 'Checkpoints';
+  if (lowerName.includes('skill test')) return 'Skill Tests';
+  if (lowerName.includes('learning/practice') || lowerName.includes('practice opportunities')) {
+    return 'Weekly Learning/Practice';
+  }
   if (lowerName.includes('final exam')) return 'Final';
   if (lowerName.includes('midterm')) return 'Midterms';
   if (lowerName.includes('exam')) return 'Exams';
@@ -166,7 +170,8 @@ function normalizeCategoryName(rawName: string): string | null {
   if (lowerName.includes('homework') || lowerName.includes('hw')) return 'Homework';
   if (lowerName.includes('assignment')) return 'Assignments';
   if (lowerName.includes('discussion')) return 'Discussions';
-  if (lowerName.includes('attendance') || lowerName.includes('participation')) return 'Attendance';
+  if (lowerName.includes('participation')) return 'Participation';
+  if (lowerName.includes('attendance')) return 'Attendance';
   if (lowerName.includes('reading')) return 'Reading';
   if (lowerName.trim() === 'final') return 'Final';
 
@@ -187,6 +192,20 @@ function buildAssignmentMatchers(categoryName: string, rawName: string): string[
     Projects: ['project'],
     Quizzes: ['quiz'],
     Reading: ['reading'],
+    Participation: ['participation', 'campuswire', 'office hours'],
+    'Skill Tests': ['skill test'],
+    'Weekly Learning/Practice': [
+      'assignment',
+      'checkpoint',
+      'homework',
+      'hw',
+      'lab',
+      'lecture quiz',
+      'practice',
+      'project',
+      'quiz',
+      'reading',
+    ],
   };
   const rawMatcher = rawName.toLowerCase().replace(/\s+/g, ' ').trim();
   const matchers = [rawMatcher, ...(baseMatchers[categoryName] ?? [])].filter(Boolean);

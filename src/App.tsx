@@ -80,6 +80,7 @@ function App() {
       getAllCategoryNames(Object.keys(categories), customCategories),
       weightOverrides,
     );
+    const isEqualWeightFallback = !scheme && gradingScheme.type === 'WEIGHTED';
     const grade = calculateGrade(categories, gradingScheme);
     const categoryNames = getVisibleCategoryNames(
       [...grade.categories.map((cat) => cat.name), ...customCategories],
@@ -161,6 +162,11 @@ function App() {
             </button>
           )}
         </div>
+        {isEqualWeightFallback && (
+          <div className="scheme-warning">
+            No course policy loaded. Current weights are evenly divided estimates.
+          </div>
+        )}
         {isFullDashboard && (
           <>
           <form
@@ -190,6 +196,16 @@ function App() {
               {policyResult.warnings.slice(0, 3).map((warning) => (
                 <p key={warning}>{warning}</p>
               ))}
+              {policyResult.attemptedUrls.length > 0 && (
+                <details>
+                  <summary>Attempted URLs</summary>
+                  <ul>
+                    {policyResult.attemptedUrls.slice(0, 12).map((url) => (
+                      <li key={url}>{url}</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
             </div>
           )}
           <form

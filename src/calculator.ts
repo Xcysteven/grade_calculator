@@ -25,6 +25,7 @@ export function categorizeAssignmentName(name: string): string {
   const lowerName = name.toLowerCase();
 
   if (lowerName.includes('checkpoint')) return 'Checkpoints';
+  if (lowerName.includes('skill test')) return 'Skill Tests';
   if (lowerName.includes('midterm')) return 'Midterms';
   if (lowerName.includes('final exam')) return 'Final';
   if (lowerName.includes('project')) return 'Projects';
