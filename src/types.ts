@@ -19,6 +19,7 @@ export interface Assignment {
 export interface CategoryRule {
   weight: number;      // 0.30 for 30%
   dropLowest?: number; // Optional: Number of lowest scores to drop (e.g., 1)
+  assignmentMatchers?: string[]; // Course-specific names that map assignments into this category
 }
 
 // Rule for Redemption (e.g., "Final Exam replaces Midterm if higher")

@@ -65,6 +65,12 @@ function normalizePolicyLines(policyText: string): string[] {
 }
 
 function parseWeightedRows(lines: string[]): ParsedWeightedRow[] {
+  const tableRows = parseKnownComponentRows(lines);
+
+  if (tableRows.length > 0) {
+    return tableRows;
+  }
+
   return lines.flatMap((line) => {
     if (!looksLikeWeightedRow(line)) {
       return [];
@@ -91,6 +97,49 @@ function parseWeightedRows(lines: string[]): ParsedWeightedRow[] {
       },
     }];
   });
+}
+
+function parseKnownComponentRows(lines: string[]): ParsedWeightedRow[] {
+  const componentPattern = /(Project Checkpoints|Midterm Exam|Final Exam|Homework|Projects|Labs|Discussions|Attendance)\s+(\d+(?:\.\d+)?)%/gi;
+  const tableLine = lines.find((line) => /component\s+weight/i.test(line));
+
+  if (!tableLine) {
+    return [];
+  }
+
+  return Array.from(tableLine.matchAll(componentPattern)).flatMap((match) => {
+    const rawName = match[1];
+    const rawWeight = match[2];
+    const categoryName = normalizeCategoryName(rawName);
+
+    if (!categoryName) {
+      return [];
+    }
+
+    const notes = getComponentNotes(tableLine, match.index ?? 0, componentPattern);
+
+    return [{
+      categoryName,
+      rawName,
+      notes,
+      rule: {
+        weight: Number(rawWeight) / 100,
+        dropLowest: detectDropLowestCount(`${rawName} ${notes}`),
+      },
+    }];
+  });
+}
+
+function getComponentNotes(
+  tableLine: string,
+  currentIndex: number,
+  componentPattern: RegExp,
+): string {
+  const nextMatch = Array.from(tableLine.matchAll(componentPattern))
+    .find((match) => (match.index ?? 0) > currentIndex);
+  const nextIndex = nextMatch?.index ?? tableLine.length;
+
+  return tableLine.slice(currentIndex, nextIndex);
 }
 
 function looksLikeWeightedRow(line: string): boolean {

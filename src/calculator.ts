@@ -21,29 +21,30 @@ export type GradeResult = {
   warnings: string[];
 };
 
-const CATEGORY_MATCHERS: Array<[string, string[]]> = [
-  ['Final', ['final']],
-  ['Midterms', ['midterm', 'exam']],
-  ['Checkpoints', ['checkpoint']],
-  ['Projects', ['project']],
-  ['Labs', ['lab']],
-  ['Homework', ['homework', 'hw', 'quiz', 'test']],
-  ['Discussions', ['discussion']],
-  ['Attendance', ['attendance']],
-];
-
 export function categorizeAssignmentName(name: string): string {
   const lowerName = name.toLowerCase();
-  const match = CATEGORY_MATCHERS.find(([, keywords]) =>
-    keywords.some((keyword) => lowerName.includes(keyword)),
-  );
 
-  return match?.[0] ?? 'Other';
+  if (lowerName.includes('checkpoint')) return 'Checkpoints';
+  if (lowerName.includes('midterm')) return 'Midterms';
+  if (lowerName.includes('final exam')) return 'Final';
+  if (lowerName.includes('project')) return 'Projects';
+  if (lowerName.includes('lab')) return 'Labs';
+  if (lowerName.includes('exam')) return 'Midterms';
+  if (lowerName.includes('homework') || lowerName.includes('hw')) return 'Homework';
+  if (lowerName.includes('quiz') || lowerName.includes('test')) return 'Homework';
+  if (lowerName.includes('discussion')) return 'Discussions';
+  if (lowerName.includes('attendance')) return 'Attendance';
+
+  return 'Other';
 }
 
-export function groupAssignmentsByCategory(assignments: Assignment[]): Record<string, Assignment[]> {
+export function groupAssignmentsByCategory(
+  assignments: Assignment[],
+  scheme?: GradingScheme,
+): Record<string, Assignment[]> {
   return assignments.reduce<Record<string, Assignment[]>>((groups, assignment) => {
-    const categoryName = categorizeAssignmentName(assignment.name);
+    const categoryName = getSchemeCategoryName(assignment.name, scheme)
+      ?? categorizeAssignmentName(assignment.name);
     groups[categoryName] ??= [];
     groups[categoryName].push(assignment);
     return groups;
@@ -66,10 +67,33 @@ export function calculateGradeFromAssignments(
   assignments: Assignment[],
   scheme?: GradingScheme,
 ): GradeResult {
-  const categories = groupAssignmentsByCategory(assignments);
+  const categories = groupAssignmentsByCategory(assignments, scheme);
   const gradingScheme = scheme ?? buildEqualWeightScheme(Object.keys(categories));
 
   return calculateGrade(categories, gradingScheme);
+}
+
+function getSchemeCategoryName(assignmentName: string, scheme?: GradingScheme): string | null {
+  if (scheme?.type !== 'WEIGHTED') {
+    return null;
+  }
+
+  const normalizedAssignmentName = normalizeMatcherText(assignmentName);
+  const matches = Object.entries(scheme.rules).flatMap(([categoryName, rule]) =>
+    (rule.assignmentMatchers ?? []).flatMap((matcher) => {
+      const normalizedMatcher = normalizeMatcherText(matcher);
+
+      return normalizedAssignmentName.includes(normalizedMatcher)
+        ? [{ categoryName, matcherLength: normalizedMatcher.length }]
+        : [];
+    }),
+  );
+
+  return matches.sort((a, b) => b.matcherLength - a.matcherLength)[0]?.categoryName ?? null;
+}
+
+function normalizeMatcherText(text: string): string {
+  return text.toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
 export function calculateGrade(
@@ -91,6 +115,11 @@ function calculateWeightedGrade(
   scheme: WeightedStrategy,
 ): GradeResult {
   const warnings: string[] = [];
+
+  if (scheme.redemptions && scheme.redemptions.length > 0) {
+    warnings.push('Redemption policy detected, but redemption is not applied yet.');
+  }
+
   const categoryGrades = Object.entries(scheme.rules).map(([categoryName, rule]) => {
     const assignments = categories[categoryName] ?? [];
     const { countedAssignments, droppedCount } = applyDropLowest(assignments, rule.dropLowest ?? 0);
@@ -117,6 +146,23 @@ function calculateWeightedGrade(
     warnings.push(`No grading rule for: ${categoriesWithoutRules.join(', ')}`);
   }
 
+  const unweightedCategoryGrades = categoriesWithoutRules.map((categoryName) => {
+    const assignments = categories[categoryName];
+    const totals = calculateTotals(assignments);
+    const percent = totals.totalMax > 0 ? (totals.totalScore / totals.totalMax) * 100 : 0;
+
+    return {
+      name: categoryName,
+      count: assignments.length,
+      droppedCount: assignments.filter((assignment) => assignment.dropped).length,
+      totalScore: totals.totalScore,
+      totalMax: totals.totalMax,
+      percent,
+      weight: 0,
+      weightedPercent: 0,
+    };
+  });
+
   const countedCategories = categoryGrades.filter((category) => category.totalMax > 0);
   const countedWeight = countedCategories.reduce((sum, category) => sum + category.weight, 0);
   const weightedPercent = countedCategories.reduce(
@@ -131,7 +177,9 @@ function calculateWeightedGrade(
     totalMax: totals.totalMax,
     countedWeight,
     strategyType: scheme.type,
-    categories: categoryGrades.sort((a, b) => b.weight - a.weight || a.name.localeCompare(b.name)),
+    categories: [...categoryGrades, ...unweightedCategoryGrades].sort(
+      (a, b) => b.weight - a.weight || a.name.localeCompare(b.name),
+    ),
     warnings,
   };
 }

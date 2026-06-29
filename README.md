@@ -1,73 +1,85 @@
-# React + TypeScript + Vite
+# UCSD Grade Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A Chrome extension for estimating DSC course grades from Gradescope data.
 
-Currently, two official plugins are available:
+The current implementation is focused on DSC 80. It scrapes visible assignment rows from Gradescope, applies the DSC 80 grading scheme, and provides a full-page what-if board for editing category weights, assignment scores, dropped items, and hypothetical future assignments.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Current Features
 
-## React Compiler
+- Scrapes assignment names and scores from Gradescope pages.
+- Stores scraped grade data locally in `chrome.storage.local`.
+- Detects DSC 80 category weights:
+  - Labs: 20%
+  - Projects: 25%
+  - Project Checkpoints: 5%
+  - Midterm: 20%
+  - Final: 30%
+- Maps DSC 80 Gradescope names like `Exam 01` and `Exam 02` to Midterm and Final.
+- Shows category-level grade summaries.
+- Opens a full category board from the popup.
+- Supports local what-if simulations:
+  - edit category weights
+  - edit item scores
+  - add categories
+  - add hypothetical assignments
+  - drop or restore assignments
+  - drag assignments between categories
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Limitations
 
-## Expanding the ESLint configuration
+- This is an estimate, not an official course grade.
+- Final redemption is detected but not applied yet.
+- Canvas support is not implemented.
+- Course policy scraping is experimental and not wired into the extension flow yet.
+- What-if simulations are temporary and reset on reload.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Development
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+Install dependencies:
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Run the dev server:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run dev
 ```
+
+Build the extension:
+
+```bash
+npm run build
+```
+
+Check code quality:
+
+```bash
+npm run lint
+```
+
+## Local Chrome Testing
+
+1. Run `npm run build`.
+2. Open `chrome://extensions`.
+3. Enable Developer mode.
+4. Click Load unpacked.
+5. Select the `dist` folder.
+6. Open a Gradescope course page and refresh it.
+7. Open the extension popup.
+
+## Publishing Checklist
+
+Before submitting to the Chrome Web Store:
+
+- Verify the extension works on real DSC 80 Gradescope pages.
+- Keep permissions minimal.
+- Add production-quality icons if the placeholder icons are not sufficient.
+- Fill out Chrome Web Store privacy disclosures accurately.
+- Link to `PRIVACY.md` or a hosted privacy policy.
+- Publish as unlisted first and test with a small group.
+
+## Privacy
+
+See [PRIVACY.md](./PRIVACY.md).
