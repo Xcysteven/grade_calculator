@@ -1,8 +1,8 @@
-import type { CategoryRule, GradingScheme, WeightedStrategy } from './types';
+import type { CategoryRule, CreditStrategy, GradingScheme, WeightedStrategy } from './types';
 
 export type ParsedPolicy = {
   scheme: GradingScheme | null;
-  source: 'detected-weight-table' | 'unknown';
+  source: 'detected-weight-table' | 'detected-credit-system' | 'unknown';
   confidence: number;
   warnings: string[];
 };
@@ -19,6 +19,12 @@ const MAX_EXPECTED_WEIGHT = 1.05;
 
 export function parseCoursePolicyText(policyText: string): ParsedPolicy {
   const lines = normalizePolicyLines(policyText);
+  const creditSystemPolicy = parseCreditSystemPolicy(policyText);
+
+  if (creditSystemPolicy) {
+    return creditSystemPolicy;
+  }
+
   const rows = parseWeightedRows(lines);
   const warnings = detectPolicyWarnings(policyText);
 
@@ -55,6 +61,109 @@ export function parseCoursePolicyText(policyText: string): ParsedPolicy {
     confidence: scoreWeightedPolicyConfidence(rows, totalWeight, warnings),
     warnings,
   };
+}
+
+function parseCreditSystemPolicy(policyText: string): ParsedPolicy | null {
+  const lowerText = policyText.toLowerCase().replace(/\s+/g, ' ');
+
+  if (!lowerText.includes('credits') || !lowerText.includes('reduce the weight of the exams')) {
+    return null;
+  }
+
+  const baseExamWeight = extractPercentBefore(lowerText, /of your grade\)\s+and the final project/i)
+    ?? 90;
+  const projectWeight = extractPercentBefore(lowerText, /of your grade\)\.\s+by completing optional assignments/i)
+    ?? 10;
+  const maxCredits = extractNumber(lowerText, /total of (\d+(?:\.\d+)?) credits available/)
+    ?? 40;
+  const homeworkCredits = extractNumber(lowerText, /homework problems will (?:add up to|be) (\d+(?:\.\d+)?) credits/)
+    ?? extractNumber(lowerText, /homework problems.*?(\d+(?:\.\d+)?) credits/)
+    ?? 24;
+  const homeworkCount = extractNumber(lowerText, /distributed across (\d+(?:\.\d+)?) homeworks/)
+    ?? 8;
+  const quizCount = extractNumber(lowerText, /there will be (\d+(?:\.\d+)?) quizzes/)
+    ?? 8;
+  const quizCreditValue = extractNumber(lowerText, /each quiz you pass earns you (\d+(?:\.\d+)?) credits/)
+    ?? 1.5;
+  const quizCredits = extractNumber(lowerText, /total of (\d+(?:\.\d+)?) possible credits/)
+    ?? quizCount * quizCreditValue;
+  const attendanceCreditValue = extractNumber(lowerText, /each lecture you attend.*?earns you (\d+(?:\.\d+)?) credits/)
+    ?? 0.25;
+  const attendanceCredits = extractNumber(lowerText, /attendance.*?earn you up to (\d+(?:\.\d+)?) credits/)
+    ?? 4;
+  const attendanceCount = attendanceCreditValue > 0
+    ? Math.ceil(attendanceCredits / attendanceCreditValue)
+    : 0;
+  const scheme: CreditStrategy = {
+    type: 'CREDIT_SYSTEM',
+    baseExamWeight: baseExamWeight / 100,
+    projectWeight: projectWeight / 100,
+    maxCredits,
+    examMatchers: [
+      'exam',
+      'midterm',
+      'redemption',
+    ],
+    projectMatchers: [
+      'final project',
+    ],
+    creditSources: [
+      {
+        name: 'Homework',
+        valuePerItem: 1,
+        maxItems: homeworkCount,
+        maxCredits: homeworkCredits,
+        creditMode: 'score',
+        assignmentMatchers: ['homework', 'hw'],
+      },
+      {
+        name: 'Quizzes',
+        valuePerItem: quizCreditValue,
+        maxItems: quizCount,
+        maxCredits: quizCredits,
+        creditMode: 'pass-fail',
+        isPassFail: true,
+        passThreshold: 0.7,
+        assignmentMatchers: ['quiz'],
+      },
+      {
+        name: 'Attendance',
+        valuePerItem: attendanceCreditValue,
+        maxItems: attendanceCount,
+        maxCredits: attendanceCredits,
+        creditMode: 'completion',
+        assignmentMatchers: ['attendance', 'lecture attendance', 'participation'],
+      },
+    ],
+  };
+  const warnings = detectPolicyWarnings(policyText);
+
+  warnings.push('Credit-based grading detected. Homework credits assume Gradescope scores are credit values.');
+
+  return {
+    scheme,
+    source: 'detected-credit-system',
+    confidence: 0.9,
+    warnings,
+  };
+}
+
+function extractPercentBefore(text: string, pattern: RegExp): number | null {
+  const match = pattern.exec(text);
+
+  if (!match?.index) {
+    return null;
+  }
+
+  const beforePattern = text.slice(Math.max(0, match.index - 80), match.index);
+  const percentMatch = beforePattern.match(/(\d+(?:\.\d+)?)%\s*$/);
+
+  return percentMatch ? Number(percentMatch[1]) : null;
+}
+
+function extractNumber(text: string, pattern: RegExp): number | null {
+  const match = text.match(pattern);
+  return match ? Number(match[1]) : null;
 }
 
 function normalizePolicyLines(policyText: string): string[] {

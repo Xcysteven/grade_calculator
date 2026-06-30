@@ -49,7 +49,11 @@ export interface CreditSource {
   name: string;         // e.g. "Quizzes"
   valuePerItem: number; // e.g. 1.5 credits per quiz
   maxItems: number;     // e.g. 8 quizzes max
+  maxCredits?: number;  // e.g. 24 credits across all homeworks
+  creditMode?: "score" | "pass-fail" | "completion";
   isPassFail?: boolean; // true if score must be > 70% to count
+  passThreshold?: number; // 0.70 means 70%
+  assignmentMatchers?: string[];
 }
 
 export interface CreditStrategy {
@@ -57,6 +61,8 @@ export interface CreditStrategy {
   baseExamWeight: number; // 0.90 (90%)
   projectWeight: number;  // 0.10 (10%)
   maxCredits: number;     // 40
+  examMatchers?: string[];
+  projectMatchers?: string[];
   creditSources: CreditSource[];
 }
 

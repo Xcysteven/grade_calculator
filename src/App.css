@@ -33,6 +33,11 @@ body.full-dashboard-body #root {
   padding: 24px 32px;
 }
 
+.container.full-dashboard.theme-dark {
+  background: #0f172a;
+  color: #cbd5e1;
+}
+
 .full-dashboard .top-bar {
   display: grid;
   grid-template-columns: minmax(180px, 260px) minmax(320px, 520px);
@@ -40,6 +45,30 @@ body.full-dashboard-body #root {
   justify-content: space-between;
   gap: 18px;
   text-align: left;
+}
+
+.top-bar-heading {
+  display: grid;
+  gap: 8px;
+  align-content: end;
+}
+
+.theme-toggle {
+  width: fit-content;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #fff;
+  color: #334155;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 800;
+  cursor: pointer;
+  outline: none;
+}
+
+.theme-toggle:focus {
+  border-color: #3b82f6;
 }
 
 .full-dashboard .course-card {
@@ -75,6 +104,10 @@ h1 {
   letter-spacing: 0.1em;
   color: #94a3b8;
   margin: 0 0 8px 0;
+}
+
+.top-bar-heading h1 {
+  margin-bottom: 0;
 }
 
 /* The Dropdown Stylizer */
@@ -586,4 +619,141 @@ h1 {
 
 .warning-list p:last-child {
   margin-bottom: 0;
+}
+
+.full-dashboard.theme-dark h1 {
+  color: #94a3b8;
+}
+
+.full-dashboard.theme-dark .theme-toggle,
+.full-dashboard.theme-dark .course-selector,
+.full-dashboard.theme-dark .policy-form input,
+.full-dashboard.theme-dark .policy-form button,
+.full-dashboard.theme-dark .add-category-form input,
+.full-dashboard.theme-dark .add-category-form button,
+.full-dashboard.theme-dark .add-item-form input,
+.full-dashboard.theme-dark .add-item-form button,
+.full-dashboard.theme-dark .weight-editor input,
+.full-dashboard.theme-dark .score-editor input,
+.full-dashboard.theme-dark .reset-button,
+.full-dashboard.theme-dark .open-full-button,
+.full-dashboard.theme-dark .drop-button {
+  border-color: #334155;
+  background: #111827;
+  color: #cbd5e1;
+  box-shadow: none;
+}
+
+.full-dashboard.theme-dark .theme-toggle:hover,
+.full-dashboard.theme-dark .policy-form button:hover,
+.full-dashboard.theme-dark .add-category-form button:hover,
+.full-dashboard.theme-dark .add-item-form button:hover,
+.full-dashboard.theme-dark .open-full-button:hover,
+.full-dashboard.theme-dark .drop-button:hover {
+  border-color: #64748b;
+  background: #1e293b;
+}
+
+.full-dashboard.theme-dark .open-full-button,
+.full-dashboard.theme-dark .policy-form button,
+.full-dashboard.theme-dark .add-category-form button,
+.full-dashboard.theme-dark .add-item-form button {
+  color: #93c5fd;
+}
+
+.full-dashboard.theme-dark .reset-button {
+  color: #fdba74;
+}
+
+.full-dashboard.theme-dark .course-card {
+  border-color: #334155;
+  background: #020617;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.36);
+}
+
+.full-dashboard.theme-dark .course-header,
+.full-dashboard.theme-dark .dashboard-actions,
+.full-dashboard.theme-dark .policy-form,
+.full-dashboard.theme-dark .add-category-form,
+.full-dashboard.theme-dark .warning-list {
+  border-color: #1e293b;
+}
+
+.full-dashboard.theme-dark .header-text h2,
+.full-dashboard.theme-dark .full-dashboard-label {
+  color: #94a3b8;
+}
+
+.full-dashboard.theme-dark .course-grade {
+  color: #f8fafc;
+}
+
+.full-dashboard.theme-dark .total-assignments,
+.full-dashboard.theme-dark .cat-count,
+.full-dashboard.theme-dark .detail-category-header p,
+.full-dashboard.theme-dark .empty-category,
+.full-dashboard.theme-dark .score-editor span {
+  color: #64748b;
+}
+
+.full-dashboard.theme-dark .category-row,
+.full-dashboard.theme-dark .detail-category,
+.full-dashboard.theme-dark .empty-state,
+.full-dashboard.theme-dark .policy-status {
+  border-color: #1e293b;
+  background: #0f172a;
+}
+
+.full-dashboard.theme-dark .assignment-item {
+  border-color: #243447;
+  background: #111827;
+}
+
+.full-dashboard.theme-dark .cat-name,
+.full-dashboard.theme-dark .detail-category-header,
+.full-dashboard.theme-dark .assignment-name,
+.full-dashboard.theme-dark .policy-status strong {
+  color: #e2e8f0;
+}
+
+.full-dashboard.theme-dark .cat-percent,
+.full-dashboard.theme-dark .assignment-score,
+.full-dashboard.theme-dark .column-grade strong,
+.full-dashboard.theme-dark .policy-status,
+.full-dashboard.theme-dark .policy-status span {
+  color: #cbd5e1;
+}
+
+.full-dashboard.theme-dark .cat-weight {
+  background: rgba(129, 140, 248, 0.16);
+  color: #a5b4fc;
+}
+
+.full-dashboard.theme-dark .progress-bar {
+  background: #1e293b;
+}
+
+.full-dashboard.theme-dark .column-grade {
+  border-color: #1e293b;
+}
+
+.full-dashboard.theme-dark .weight-editor,
+.full-dashboard.theme-dark .weight-editor span,
+.full-dashboard.theme-dark .detail-category-header span {
+  color: #a5b4fc;
+}
+
+.full-dashboard.theme-dark .weight-editor input {
+  color: #c4b5fd;
+}
+
+.full-dashboard.theme-dark .scheme-warning {
+  border-color: rgba(251, 146, 60, 0.42);
+  background: rgba(154, 52, 18, 0.18);
+  color: #fdba74;
+}
+
+.full-dashboard.theme-dark .warning-list p,
+.full-dashboard.theme-dark .policy-status p {
+  color: #fdba74;
 }

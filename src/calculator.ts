@@ -1,4 +1,11 @@
-import type { Assignment, CategoryRule, GradingScheme, WeightedStrategy } from './types';
+import type {
+  Assignment,
+  CategoryRule,
+  CreditSource,
+  CreditStrategy,
+  GradingScheme,
+  WeightedStrategy,
+} from './types';
 
 export type CategoryGrade = {
   name: string;
@@ -78,11 +85,33 @@ export function calculateGradeFromAssignments(
 }
 
 function getSchemeCategoryName(assignmentName: string, scheme?: GradingScheme): string | null {
-  if (scheme?.type !== 'WEIGHTED') {
+  if (!scheme || scheme.type === 'TOTAL_POINTS') {
     return null;
   }
 
   const normalizedAssignmentName = normalizeMatcherText(assignmentName);
+
+  if (scheme.type === 'CREDIT_SYSTEM') {
+    if (matchesAny(normalizedAssignmentName, scheme.projectMatchers ?? ['final project'])) {
+      return 'Final Project';
+    }
+
+    if (matchesAny(normalizedAssignmentName, scheme.examMatchers ?? ['midterm', 'exam'])) {
+      return 'Exams';
+    }
+
+    const creditSourceMatch = scheme.creditSources
+      .flatMap((source) => (source.assignmentMatchers ?? [source.name]).map((matcher) => ({
+        categoryName: source.name,
+        matcherLength: normalizeMatcherText(matcher).length,
+        normalizedMatcher: normalizeMatcherText(matcher),
+      })))
+      .filter((match) => normalizedAssignmentName.includes(match.normalizedMatcher))
+      .sort((a, b) => b.matcherLength - a.matcherLength)[0];
+
+    return creditSourceMatch?.categoryName ?? null;
+  }
+
   const matches = Object.entries(scheme.rules).flatMap(([categoryName, rule]) =>
     (rule.assignmentMatchers ?? []).flatMap((matcher) => {
       const normalizedMatcher = normalizeMatcherText(matcher);
@@ -94,6 +123,10 @@ function getSchemeCategoryName(assignmentName: string, scheme?: GradingScheme): 
   );
 
   return matches.sort((a, b) => b.matcherLength - a.matcherLength)[0]?.categoryName ?? null;
+}
+
+function matchesAny(normalizedAssignmentName: string, matchers: string[]): boolean {
+  return matchers.some((matcher) => normalizedAssignmentName.includes(normalizeMatcherText(matcher)));
 }
 
 function normalizeMatcherText(text: string): string {
@@ -110,7 +143,7 @@ export function calculateGrade(
     case 'TOTAL_POINTS':
       return calculateTotalPointsGrade(categories);
     case 'CREDIT_SYSTEM':
-      return unsupportedStrategyResult(categories, scheme.type);
+      return calculateCreditSystemGrade(categories, scheme);
   }
 }
 
@@ -221,21 +254,153 @@ function calculateTotalPointsGrade(categories: Record<string, Assignment[]>): Gr
   };
 }
 
-function unsupportedStrategyResult(
+function calculateCreditSystemGrade(
   categories: Record<string, Assignment[]>,
-  strategyType: GradingScheme['type'],
+  scheme: CreditStrategy,
 ): GradeResult {
-  const totals = calculateTotals(Object.values(categories).flat());
+  const warnings = [
+    'Credit-system policy detected. Homework, quiz, and attendance credits reduce exam weight.',
+  ];
+  const examAssignments = categories.Exams ?? [];
+  const projectAssignments = categories['Final Project'] ?? [];
+  const examPercent = averageAssignmentPercent(examAssignments);
+  const projectTotals = calculateTotals(projectAssignments);
+  const projectPercent = projectTotals.totalMax > 0
+    ? (projectTotals.totalScore / projectTotals.totalMax) * 100
+    : 0;
+  const creditGrades = scheme.creditSources.map((source) => {
+    const assignments = categories[source.name] ?? [];
+    const maxCredits = getSourceMaxCredits(source);
+    const earnedCredits = Math.min(calculateEarnedCredits(assignments, source), maxCredits);
+
+    return {
+      name: source.name,
+      count: assignments.filter((assignment) => !assignment.dropped).length,
+      droppedCount: assignments.filter((assignment) => assignment.dropped).length,
+      totalScore: earnedCredits,
+      totalMax: maxCredits,
+      percent: maxCredits > 0 ? (earnedCredits / maxCredits) * 100 : 0,
+      weight: maxCredits / 100,
+      weightedPercent: earnedCredits,
+    };
+  });
+  const earnedCredits = Math.min(
+    creditGrades.reduce((sum, category) => sum + category.totalScore, 0),
+    scheme.maxCredits,
+  );
+  const earnedCreditWeight = earnedCredits / 100;
+  const examWeight = Math.max(scheme.baseExamWeight - earnedCreditWeight, 0);
+  const examTotals = calculateTotals(examAssignments);
+  const examGrade: CategoryGrade = {
+    name: 'Exams',
+    count: examAssignments.filter((assignment) => !assignment.dropped).length,
+    droppedCount: examAssignments.filter((assignment) => assignment.dropped).length,
+    totalScore: examTotals.totalScore,
+    totalMax: examTotals.totalMax,
+    percent: examPercent,
+    weight: examWeight,
+    weightedPercent: examPercent * examWeight,
+  };
+  const projectGrade: CategoryGrade = {
+    name: 'Final Project',
+    count: projectAssignments.filter((assignment) => !assignment.dropped).length,
+    droppedCount: projectAssignments.filter((assignment) => assignment.dropped).length,
+    totalScore: projectTotals.totalScore,
+    totalMax: projectTotals.totalMax,
+    percent: projectPercent,
+    weight: scheme.projectWeight,
+    weightedPercent: projectPercent * scheme.projectWeight,
+  };
+  const requiredGrades = [examGrade, projectGrade];
+  const countedRequiredGrades = requiredGrades.filter((category) => category.totalMax > 0);
+  const countedRequiredWeight = countedRequiredGrades.reduce((sum, category) => sum + category.weight, 0);
+  const requiredWeightedPercent = countedRequiredGrades.reduce(
+    (sum, category) => sum + category.weightedPercent,
+    0,
+  );
+  const countedWeight = countedRequiredWeight + earnedCreditWeight;
+  const categoriesWithoutRules = Object.keys(categories).filter((categoryName) => (
+    categoryName !== 'Exams'
+    && categoryName !== 'Final Project'
+    && !scheme.creditSources.some((source) => source.name === categoryName)
+  ));
+
+  if (categoriesWithoutRules.length > 0) {
+    warnings.push(`No grading rule for: ${categoriesWithoutRules.join(', ')}.`);
+  }
+
+  const extraCategoryGrades = categoriesWithoutRules.map((categoryName) => {
+    const assignments = categories[categoryName];
+    const totals = calculateTotals(assignments);
+    const percent = totals.totalMax > 0 ? (totals.totalScore / totals.totalMax) * 100 : 0;
+
+    return {
+      name: categoryName,
+      count: assignments.length,
+      droppedCount: assignments.filter((assignment) => assignment.dropped).length,
+      totalScore: totals.totalScore,
+      totalMax: totals.totalMax,
+      percent,
+      weight: 0,
+      weightedPercent: 0,
+    };
+  });
+  const allAssignments = Object.values(categories).flat();
+  const allTotals = calculateTotals(allAssignments);
 
   return {
-    percent: 0,
-    totalScore: totals.totalScore,
-    totalMax: totals.totalMax,
-    countedWeight: 0,
-    strategyType,
-    categories: [],
-    warnings: [`${strategyType} calculation is not implemented yet.`],
+    percent: countedWeight > 0
+      ? (requiredWeightedPercent + earnedCredits) / countedWeight
+      : 0,
+    totalScore: allTotals.totalScore,
+    totalMax: allTotals.totalMax,
+    countedWeight,
+    strategyType: 'CREDIT_SYSTEM',
+    categories: [
+      examGrade,
+      projectGrade,
+      ...creditGrades,
+      ...extraCategoryGrades,
+    ].sort((a, b) => b.weight - a.weight || a.name.localeCompare(b.name)),
+    warnings,
   };
+}
+
+function calculateEarnedCredits(assignments: Assignment[], source: CreditSource): number {
+  const eligibleAssignments = assignments.filter((assignment) => !assignment.dropped);
+  const mode = source.creditMode ?? (source.isPassFail ? 'pass-fail' : 'score');
+  const passThreshold = source.passThreshold ?? 0.7;
+
+  if (mode === 'pass-fail') {
+    return eligibleAssignments.reduce((sum, assignment) => (
+      assignmentPercent(assignment) >= passThreshold ? sum + source.valuePerItem : sum
+    ), 0);
+  }
+
+  if (mode === 'completion') {
+    return eligibleAssignments.reduce((sum, assignment) => (
+      assignment.score > 0 ? sum + source.valuePerItem : sum
+    ), 0);
+  }
+
+  return eligibleAssignments.reduce((sum, assignment) => sum + assignment.score, 0);
+}
+
+function getSourceMaxCredits(source: CreditSource): number {
+  return source.maxCredits ?? source.maxItems * source.valuePerItem;
+}
+
+function averageAssignmentPercent(assignments: Assignment[]): number {
+  const eligibleAssignments = assignments.filter((assignment) => !assignment.dropped && assignment.maxScore > 0);
+
+  if (eligibleAssignments.length === 0) {
+    return 0;
+  }
+
+  return eligibleAssignments.reduce(
+    (sum, assignment) => sum + assignmentPercent(assignment) * 100,
+    0,
+  ) / eligibleAssignments.length;
 }
 
 function applyDropLowest(

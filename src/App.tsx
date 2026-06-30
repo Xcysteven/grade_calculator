@@ -7,17 +7,25 @@ import {
 } from './calculator';
 import { discoverCoursePolicy, type CoursePolicyResult } from './coursePolicy';
 import { getKnownCourseScheme } from './courseSchemes';
-import type { Assignment, GradingScheme, WeightedStrategy } from './types';
+import type { Assignment, CreditStrategy, GradingScheme, WeightedStrategy } from './types';
 
 type AssignmentGroups = Record<string, Assignment[]>;
 type AssignmentFlags = Record<string, boolean>;
 type CategoryOverrides = Record<string, string>;
 type ScoreOverrides = Record<string, { score: number; maxScore: number }>;
 type WeightOverrides = Record<string, number>;
+type DashboardTheme = 'light' | 'dark';
+type DashboardThemePreference = 'auto' | DashboardTheme;
 
 function App() {
   const isFullDashboard = new URLSearchParams(window.location.search).get('view') === 'full';
   const canUseChromeStorage = typeof chrome !== 'undefined' && Boolean(chrome.storage?.local);
+  const [systemDashboardTheme, setSystemDashboardTheme] = useState<DashboardTheme>(() => (
+    readSystemDashboardTheme()
+  ));
+  const [dashboardThemePreference, setDashboardThemePreference] = useState<DashboardThemePreference>(() => (
+    readStoredDashboardThemePreference()
+  ));
   const [courses, setCourses] = useState<{ [key: string]: Assignment[] }>({});
   const [selectedCourse, setSelectedCourse] = useState<string>(""); // New state for "Which one?"
   const [loading, setLoading] = useState(canUseChromeStorage);
@@ -57,6 +65,28 @@ function App() {
       document.body.classList.remove('full-dashboard-body');
     };
   }, [isFullDashboard]);
+
+  useEffect(() => {
+    if (!isFullDashboard) {
+      return;
+    }
+
+    window.localStorage.setItem('grade-dashboard-theme-preference', dashboardThemePreference);
+  }, [dashboardThemePreference, isFullDashboard]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const updateSystemTheme = () => {
+      setSystemDashboardTheme(mediaQuery.matches ? 'dark' : 'light');
+    };
+
+    updateSystemTheme();
+    mediaQuery.addEventListener('change', updateSystemTheme);
+
+    return () => {
+      mediaQuery.removeEventListener('change', updateSystemTheme);
+    };
+  }, []);
 
   useEffect(() => {
     if (!selectedCourse || !courses[selectedCourse]) {
@@ -437,10 +467,26 @@ function App() {
   };
 
   return (
-    <div className={isFullDashboard ? 'container full-dashboard' : 'container'}>
+    <div className={isFullDashboard ? `container full-dashboard theme-${getEffectiveDashboardTheme(dashboardThemePreference, systemDashboardTheme)}` : 'container'}>
       {/* HEADER: DROPDOWN MENU */}
       <div className="top-bar">
-        <h1>Grade Dashboard</h1>
+        <div className="top-bar-heading">
+          <h1>Grade Dashboard</h1>
+          {isFullDashboard && (
+            <select
+              className="theme-toggle"
+              value={dashboardThemePreference}
+              onChange={(event) => {
+                setDashboardThemePreference(event.target.value as DashboardThemePreference);
+              }}
+              aria-label="Dashboard theme"
+            >
+              <option value="auto">Auto theme</option>
+              <option value="light">Light mode</option>
+              <option value="dark">Dark mode</option>
+            </select>
+          )}
+        </div>
         {Object.keys(courses).length > 0 && (
           <select 
             className="course-selector"
@@ -476,6 +522,32 @@ function App() {
       )}
     </div>
   );
+}
+
+function readStoredDashboardThemePreference(): DashboardThemePreference {
+  if (typeof window === 'undefined') {
+    return 'auto';
+  }
+
+  const storedPreference = window.localStorage.getItem('grade-dashboard-theme-preference');
+  return storedPreference === 'light' || storedPreference === 'dark'
+    ? storedPreference
+    : 'auto';
+}
+
+function readSystemDashboardTheme(): DashboardTheme {
+  if (typeof window === 'undefined') {
+    return 'light';
+  }
+
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function getEffectiveDashboardTheme(
+  preference: DashboardThemePreference,
+  systemTheme: DashboardTheme,
+): DashboardTheme {
+  return preference === 'auto' ? systemTheme : preference;
 }
 
 function openFullDashboard(): void {
@@ -537,6 +609,10 @@ function buildSimulationScheme(
   categoryNames: string[],
   weightOverrides: WeightOverrides,
 ): GradingScheme {
+  if (baseScheme.type === 'CREDIT_SYSTEM') {
+    return applyCreditSystemOverrides(baseScheme, weightOverrides);
+  }
+
   if (baseScheme.type !== 'WEIGHTED') {
     return baseScheme;
   }
@@ -558,6 +634,29 @@ function buildSimulationScheme(
   return {
     ...baseScheme,
     rules,
+  };
+}
+
+function applyCreditSystemOverrides(
+  baseScheme: CreditStrategy,
+  weightOverrides: WeightOverrides,
+): CreditStrategy {
+  return {
+    ...baseScheme,
+    baseExamWeight: weightOverrides.Exams ?? baseScheme.baseExamWeight,
+    projectWeight: weightOverrides['Final Project'] ?? baseScheme.projectWeight,
+    creditSources: baseScheme.creditSources.map((source) => {
+      const overrideWeight = weightOverrides[source.name];
+
+      if (overrideWeight === undefined) {
+        return source;
+      }
+
+      return {
+        ...source,
+        maxCredits: overrideWeight * 100,
+      };
+    }),
   };
 }
 
@@ -587,6 +686,21 @@ function getAllCategoryNames(categoryNames: string[], customCategories: string[]
 function formatCategoryWeightValue(categoryName: string, scheme: GradingScheme): number {
   if (scheme.type === 'WEIGHTED') {
     return scheme.rules[categoryName]?.weight ?? 0;
+  }
+
+  if (scheme.type === 'CREDIT_SYSTEM') {
+    if (categoryName === 'Exams') {
+      return scheme.baseExamWeight;
+    }
+
+    if (categoryName === 'Final Project') {
+      return scheme.projectWeight;
+    }
+
+    const source = scheme.creditSources.find((creditSource) => creditSource.name === categoryName);
+    if (source) {
+      return (source.maxCredits ?? source.maxItems * source.valuePerItem) / 100;
+    }
   }
 
   return 0;

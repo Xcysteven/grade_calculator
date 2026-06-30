@@ -26,6 +26,7 @@ The extension scrapes visible assignment rows from Gradescope, tries to detect t
   - `https://dsc-courses.github.io/dscXX/syllabus.html`
   - `https://dsc-courses.github.io/dscXX/`
 - Parses weighted grading tables from public policy text.
+- Parses DSC140B-style credit grading policies where optional credits reduce exam weight.
 - Adds generic category matchers for common policy components:
   - labs
   - projects
@@ -41,6 +42,7 @@ The extension scrapes visible assignment rows from Gradescope, tries to detect t
   - reading
 - Keeps a known DSC 80 fallback scheme for cases where the public policy page cannot be parsed cleanly.
 - Opens a full category board for local simulations.
+- The full category board defaults to `Auto theme`, matching Chrome or OS light/dark mode, with manual Light and Dark overrides.
 - Supports local what-if editing:
   - edit category weights
   - edit assignment scores and max scores
@@ -59,17 +61,18 @@ The extension does not use an AI model for policy parsing. The flow is determini
 4. It builds candidate URLs from verified repo metadata, GitHub Pages, raw repo files, and then stable fallback domains.
 5. It fetches each candidate page in order.
 6. It strips HTML into readable text.
-7. `src/policyParser.ts` looks for weighted grading rows, especially tables with a `Component` and `Weight` structure.
-8. Parsed rows are normalized into calculator categories such as `Labs`, `Projects`, `Quizzes`, or `Exams`.
-9. Each category gets generic assignment matchers so Gradescope item names can be grouped under the detected policy.
-10. If the parsed weights look complete, usually close to 100%, the detected scheme is used.
-11. If parsing fails, the app falls back to a known course scheme when one exists, currently DSC 80, or equal category weights.
+7. `src/policyParser.ts` first looks for credit-system policies such as DSC140B, where optional credits reduce exam weight.
+8. If no credit system is found, it looks for weighted grading rows, especially tables with a `Component` and `Weight` structure.
+9. Parsed rows are normalized into calculator categories such as `Labs`, `Projects`, `Quizzes`, or `Exams`.
+10. Each category gets generic assignment matchers so Gradescope item names can be grouped under the detected policy.
+11. If the parsed weights look complete, usually close to 100%, the detected scheme is used.
+12. If parsing fails, the app falls back to a known course scheme when one exists, currently DSC 80, or equal category weights.
 
 ## Limitations
 
 - This is an estimate, not an official course grade.
-- The parser currently handles weighted grading schemes best.
-- Credit-based grading systems are typed in the code but not implemented in the calculator yet.
+- The parser currently handles weighted grading schemes and DSC140B-style credit grading.
+- Credit-based homework assumes Gradescope scores represent earned credit values, which should be checked against the course's Gradescope setup.
 - Final redemption is detected but not applied yet.
 - Late policies, slip days, extra credit, and uneven subweights are detected as warnings but not fully modeled.
 - Canvas support is not implemented.
