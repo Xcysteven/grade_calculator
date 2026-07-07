@@ -244,6 +244,7 @@ h1 {
 }
 
 .reset-button,
+.danger-button,
 .open-full-button,
 .drop-button,
 .add-category-form button,
@@ -259,7 +260,8 @@ h1 {
 }
 
 .open-full-button,
-.reset-button {
+.reset-button,
+.danger-button {
   padding: 8px 10px;
 }
 
@@ -270,6 +272,10 @@ h1 {
 
 .reset-button {
   color: #92400e;
+}
+
+.danger-button {
+  color: #b91c1c;
 }
 
 .full-dashboard-label {
@@ -299,6 +305,7 @@ h1 {
 }
 
 .policy-form input,
+.policy-form textarea,
 .policy-form button,
 .add-category-form input,
 .add-category-form button {
@@ -306,6 +313,7 @@ h1 {
 }
 
 .policy-form input,
+.policy-form textarea,
 .policy-form button {
   border: 1px solid #cbd5e1;
   border-radius: 7px;
@@ -317,6 +325,16 @@ h1 {
 
 .policy-form input {
   padding: 8px 10px;
+}
+
+.policy-form textarea {
+  grid-column: 1 / -1;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 92px;
+  padding: 8px 10px;
+  resize: vertical;
+  line-height: 1.4;
 }
 
 .policy-form button {
@@ -374,6 +392,27 @@ h1 {
 
 .policy-status li {
   overflow-wrap: anywhere;
+}
+
+.policy-status-actions {
+  margin-top: 6px;
+}
+
+.policy-status-actions button {
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #fff;
+  color: #1d4ed8;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.policy-status-actions button:disabled {
+  cursor: wait;
+  opacity: 0.7;
 }
 
 .scheme-warning {
@@ -628,6 +667,7 @@ h1 {
 .full-dashboard.theme-dark .theme-toggle,
 .full-dashboard.theme-dark .course-selector,
 .full-dashboard.theme-dark .policy-form input,
+.full-dashboard.theme-dark .policy-form textarea,
 .full-dashboard.theme-dark .policy-form button,
 .full-dashboard.theme-dark .add-category-form input,
 .full-dashboard.theme-dark .add-category-form button,
@@ -636,8 +676,10 @@ h1 {
 .full-dashboard.theme-dark .weight-editor input,
 .full-dashboard.theme-dark .score-editor input,
 .full-dashboard.theme-dark .reset-button,
+.full-dashboard.theme-dark .danger-button,
 .full-dashboard.theme-dark .open-full-button,
-.full-dashboard.theme-dark .drop-button {
+.full-dashboard.theme-dark .drop-button,
+.full-dashboard.theme-dark .policy-status-actions button {
   border-color: #334155;
   background: #111827;
   color: #cbd5e1;
@@ -649,7 +691,8 @@ h1 {
 .full-dashboard.theme-dark .add-category-form button:hover,
 .full-dashboard.theme-dark .add-item-form button:hover,
 .full-dashboard.theme-dark .open-full-button:hover,
-.full-dashboard.theme-dark .drop-button:hover {
+.full-dashboard.theme-dark .drop-button:hover,
+.full-dashboard.theme-dark .policy-status-actions button:hover {
   border-color: #64748b;
   background: #1e293b;
 }
@@ -657,12 +700,17 @@ h1 {
 .full-dashboard.theme-dark .open-full-button,
 .full-dashboard.theme-dark .policy-form button,
 .full-dashboard.theme-dark .add-category-form button,
-.full-dashboard.theme-dark .add-item-form button {
+.full-dashboard.theme-dark .add-item-form button,
+.full-dashboard.theme-dark .policy-status-actions button {
   color: #93c5fd;
 }
 
 .full-dashboard.theme-dark .reset-button {
   color: #fdba74;
+}
+
+.full-dashboard.theme-dark .danger-button {
+  color: #fca5a5;
 }
 
 .full-dashboard.theme-dark .course-card {

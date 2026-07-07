@@ -78,6 +78,14 @@ export async function discoverCoursePolicy(
   };
 }
 
+export function parseManualCoursePolicyText(policyText: string): CoursePolicyResult {
+  return {
+    ...parseCoursePolicyText(policyText),
+    url: null,
+    attemptedUrls: ['manual syllabus text'],
+  };
+}
+
 async function getVerifiedPolicyCandidateUrls(
   courseName: string,
   manualUrl?: string,
@@ -89,10 +97,10 @@ async function getVerifiedPolicyCandidateUrls(
     : [];
   const fallbackUrls = getPolicyCandidateUrls(courseName);
 
-  return uniqueUrls([...manualUrls, ...githubUrls, ...fallbackUrls]);
+  return uniqueUrls([...manualUrls, ...fallbackUrls, ...githubUrls]);
 }
 
-async function fetchReadableText(url: string): Promise<string> {
+async function fetchReadableText(url: string, followLinkedPolicies = true): Promise<string> {
   const response = await fetch(url);
 
   if (!response.ok) {
@@ -100,7 +108,22 @@ async function fetchReadableText(url: string): Promise<string> {
   }
 
   const html = await response.text();
-  return htmlToText(html);
+  const linkedPolicyTexts = followLinkedPolicies
+    ? await Promise.all(
+      extractLinkedPolicyUrls(html, url).map(async (linkedUrl) => {
+        try {
+          return await fetchReadableText(linkedUrl, false);
+        } catch {
+          return '';
+        }
+      }),
+    )
+    : [];
+
+  return [
+    htmlToText(html),
+    ...linkedPolicyTexts,
+  ].filter(Boolean).join('\n');
 }
 
 function htmlToText(html: string): string {
@@ -131,6 +154,93 @@ function buildCourseCodeUrls(courseCode: string): string[] {
     `https://dsc-courses.github.io/${normalizedCourseCode}/syllabus.html`,
     `https://dsc-courses.github.io/${normalizedCourseCode}/`,
   ];
+}
+
+export function extractLinkedPolicyUrls(html: string, baseUrl: string): string[] {
+  const linkPattern = /<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  const links = Array.from(html.matchAll(linkPattern)).flatMap((match) => {
+    const href = match[1];
+    const linkText = htmlToText(match[2]).toLowerCase();
+
+    if (!/syllabus|grading|policy/.test(linkText)) {
+      return [];
+    }
+
+    const absoluteUrl = toAbsoluteUrl(href, baseUrl);
+    if (!absoluteUrl) {
+      return [];
+    }
+
+    const normalizedUrl = normalizeLinkedPolicyUrl(absoluteUrl);
+    if (!shouldFetchLinkedPolicyUrl(normalizedUrl, baseUrl)) {
+      return [];
+    }
+
+    return [normalizedUrl];
+  });
+
+  return uniqueUrls(links).filter((url) => url !== baseUrl);
+}
+
+function toAbsoluteUrl(href: string, baseUrl: string): string | null {
+  try {
+    return new URL(href, baseUrl).toString();
+  } catch {
+    return null;
+  }
+}
+
+function normalizeLinkedPolicyUrl(url: string): string {
+  const googleRedirectTarget = getGoogleRedirectTarget(url);
+
+  if (googleRedirectTarget) {
+    return normalizeLinkedPolicyUrl(googleRedirectTarget);
+  }
+
+  const googleDocMatch = url.match(/https:\/\/docs\.google\.com\/document\/d\/([^/?#]+)/);
+
+  if (googleDocMatch) {
+    return `https://docs.google.com/document/d/${googleDocMatch[1]}/export?format=txt`;
+  }
+
+  return url;
+}
+
+function getGoogleRedirectTarget(url: string): string | null {
+  try {
+    const parsedUrl = new URL(url);
+
+    if (!parsedUrl.hostname.endsWith('google.com') || parsedUrl.pathname !== '/url') {
+      return null;
+    }
+
+    return parsedUrl.searchParams.get('q') ?? parsedUrl.searchParams.get('url');
+  } catch {
+    return null;
+  }
+}
+
+function shouldFetchLinkedPolicyUrl(url: string, baseUrl: string): boolean {
+  try {
+    const parsedUrl = new URL(url);
+    const parsedBaseUrl = new URL(baseUrl);
+
+    if (parsedUrl.origin === parsedBaseUrl.origin) {
+      return true;
+    }
+
+    if (parsedUrl.hostname === 'docs.google.com' && parsedUrl.pathname.includes('/document/d/')) {
+      return true;
+    }
+
+    return parsedUrl.hostname === 'dsc-courses.github.io'
+      || (
+        parsedUrl.hostname === 'raw.githubusercontent.com'
+        && parsedUrl.pathname.startsWith('/dsc-courses/')
+      );
+  } catch {
+    return false;
+  }
 }
 
 async function getGithubCoursePolicyUrls(

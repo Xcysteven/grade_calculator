@@ -1,10 +1,10 @@
 # Privacy Policy
 
-UCSD Grade Dashboard is designed to run locally in the user's browser.
+UCSD Grade Dashboard is designed to run locally in the user's browser. It does not require a developer-owned backend.
 
 ## Data Collected
 
-The extension reads assignment names, scores, and maximum scores from supported Gradescope pages. It also reads public course repository metadata and public course policy pages when the user asks the dashboard to detect a grading policy.
+The extension reads assignment names, scores, and maximum scores from supported Gradescope pages. It also reads public course repository metadata and public course policy pages when policy detection runs. If a user pastes syllabus grading text into the dashboard, that pasted text is parsed locally in the browser.
 
 ## How Data Is Used
 
@@ -12,7 +12,7 @@ Grade data is used to calculate estimated course grades and display local what-i
 
 ## Data Storage
 
-Scraped grade data is stored locally using Chrome extension storage. The current extension does not send grade data to a developer-owned server.
+Scraped grade data is stored locally using Chrome extension storage. What-if edits are kept in the dashboard session and reset when the dashboard is reloaded. The extension does not send grade data to a developer-owned server.
 
 ## Data Sharing
 
@@ -20,11 +20,11 @@ The extension does not sell grade data and does not share grade data with third 
 
 ## Network Requests
 
-The extension reads Gradescope pages through a content script. When policy detection is used, the extension may fetch public metadata from `api.github.com`, public course files from `raw.githubusercontent.com/dsc-courses`, and public DSC course websites such as `dsc80.com`, `dsc100.org`, or `dsc-courses.github.io`.
+The extension reads Gradescope pages through a content script. When policy detection is used, the extension may fetch public metadata from `api.github.com`, public course files from `raw.githubusercontent.com/dsc-courses`, public DSC course websites such as `dsc80.com` or `dsc20.org`, GitHub Pages course sites under `dsc-courses.github.io`, and public Google Docs syllabi.
 
 ## User Control
 
-Users can remove stored extension data by removing the extension or clearing extension storage through Chrome.
+Users can remove stored course data from the full dashboard with `Clear course data`. Users can also remove all stored extension data by removing the extension or clearing extension storage through Chrome.
 
 ## Disclaimer
 

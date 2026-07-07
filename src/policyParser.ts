@@ -37,8 +37,9 @@ export function parseCoursePolicyText(policyText: string): ParsedPolicy {
     };
   }
 
+  const combinedRows = combineDuplicateRows(rows);
   const rules = Object.fromEntries(
-    rows.map((row) => [row.categoryName, row.rule]),
+    combinedRows.map((row) => [row.categoryName, row.rule]),
   ) as WeightedStrategy['rules'];
   const totalWeight = Object.values(rules).reduce((sum, rule) => sum + rule.weight, 0);
 
@@ -46,7 +47,7 @@ export function parseCoursePolicyText(policyText: string): ParsedPolicy {
     warnings.push(`Detected weights add to ${(totalWeight * 100).toFixed(1)}%, not 100%.`);
   }
 
-  const duplicateCategories = findDuplicateCategories(rows.map((row) => row.categoryName));
+  const duplicateCategories = findDuplicateCategories(combinedRows.map((row) => row.categoryName));
   if (duplicateCategories.length > 0) {
     warnings.push(`Multiple rows mapped to: ${duplicateCategories.join(', ')}.`);
   }
@@ -58,7 +59,7 @@ export function parseCoursePolicyText(policyText: string): ParsedPolicy {
       redemptions: detectRedemptions(policyText),
     },
     source: 'detected-weight-table',
-    confidence: scoreWeightedPolicyConfidence(rows, totalWeight, warnings),
+    confidence: scoreWeightedPolicyConfidence(combinedRows, totalWeight, warnings),
     warnings,
   };
 }
@@ -180,6 +181,28 @@ function parseWeightedRows(lines: string[]): ParsedWeightedRow[] {
     return tableRows;
   }
 
+  const headingRows = parsePercentageHeadingRows(lines);
+  const headingWeight = sumParsedWeight(headingRows);
+
+  if (
+    headingRows.length >= 2
+    && headingWeight >= MIN_EXPECTED_WEIGHT
+    && headingWeight <= MAX_EXPECTED_WEIGHT
+  ) {
+    return headingRows;
+  }
+
+  const leadingPercentRows = parseLeadingPercentRows(lines);
+  const leadingPercentWeight = sumParsedWeight(leadingPercentRows);
+
+  if (
+    leadingPercentRows.length >= 2
+    && leadingPercentWeight >= MIN_EXPECTED_WEIGHT
+    && leadingPercentWeight <= MAX_EXPECTED_WEIGHT
+  ) {
+    return leadingPercentRows;
+  }
+
   return lines.flatMap((line) => {
     if (!looksLikeWeightedRow(line)) {
       return [];
@@ -207,6 +230,102 @@ function parseWeightedRows(lines: string[]): ParsedWeightedRow[] {
       },
     }];
   });
+}
+
+function parseLeadingPercentRows(lines: string[]): ParsedWeightedRow[] {
+  return lines.flatMap((line) => {
+    if (/extra credit/i.test(line)) {
+      return [];
+    }
+
+    const match = line.match(/^(?:[-*]\s*)?(\d+(?:\.\d+)?)%:\s*["“]?(.+?)["”]?\s*$/);
+
+    if (!match) {
+      return [];
+    }
+
+    const [, rawWeight, rawName] = match;
+    const categoryName = normalizeCategoryName(rawName);
+
+    if (!categoryName) {
+      return [];
+    }
+
+    return [{
+      categoryName,
+      rawName,
+      notes: '',
+      rule: {
+        weight: Number(rawWeight) / 100,
+        assignmentMatchers: buildAssignmentMatchers(categoryName, rawName),
+      },
+    }];
+  });
+}
+
+function parsePercentageHeadingRows(lines: string[]): ParsedWeightedRow[] {
+  return lines.flatMap((line) => {
+    if (/extra credit/i.test(line)) {
+      return [];
+    }
+
+    const match = line.match(/^(?:[-*]\s*)?([A-Za-z][A-Za-z/&\s-]{2,60})\s+\((\d+(?:\.\d+)?)%\):?\s*(.*)$/);
+
+    if (!match) {
+      return [];
+    }
+
+    const [, rawName, rawWeight, notes] = match;
+    const categoryName = normalizeCategoryName(rawName);
+
+    if (!categoryName) {
+      return [];
+    }
+
+    return [{
+      categoryName,
+      rawName,
+      notes,
+      rule: {
+        weight: Number(rawWeight) / 100,
+        dropLowest: detectDropLowestCount(`${rawName} ${notes}`),
+        assignmentMatchers: buildAssignmentMatchers(categoryName, rawName),
+      },
+    }];
+  });
+}
+
+function sumParsedWeight(rows: ParsedWeightedRow[]): number {
+  return rows.reduce((sum, row) => sum + row.rule.weight, 0);
+}
+
+function combineDuplicateRows(rows: ParsedWeightedRow[]): ParsedWeightedRow[] {
+  const rowByCategory = new Map<string, ParsedWeightedRow>();
+
+  rows.forEach((row) => {
+    const existingRow = rowByCategory.get(row.categoryName);
+
+    if (!existingRow) {
+      rowByCategory.set(row.categoryName, row);
+      return;
+    }
+
+    rowByCategory.set(row.categoryName, {
+      ...existingRow,
+      rawName: `${existingRow.rawName}, ${row.rawName}`,
+      notes: [existingRow.notes, row.notes].filter(Boolean).join(' '),
+      rule: {
+        weight: existingRow.rule.weight + row.rule.weight,
+        dropLowest: Math.max(existingRow.rule.dropLowest ?? 0, row.rule.dropLowest ?? 0) || undefined,
+        assignmentMatchers: Array.from(new Set([
+          ...(existingRow.rule.assignmentMatchers ?? []),
+          ...(row.rule.assignmentMatchers ?? []),
+        ])),
+      },
+    });
+  });
+
+  return Array.from(rowByCategory.values());
 }
 
 function parseKnownComponentRows(lines: string[]): ParsedWeightedRow[] {
@@ -257,16 +376,23 @@ function looksLikeWeightedRow(line: string): boolean {
   const lowerLine = line.toLowerCase();
 
   return /\d+(?:\.\d+)?%/.test(line)
+    && line.length <= 140
     && !lowerLine.startsWith('component ')
     && !lowerLine.startsWith('weight ')
     && Boolean(normalizeCategoryName(line));
 }
 
 function normalizeCategoryName(rawName: string): string | null {
-  const lowerName = rawName.toLowerCase();
+  const lowerName = rawName
+    .toLowerCase()
+    .replace(/^[-*•\s]+/, '')
+    .replace(/["“”]/g, '')
+    .replace(/:$/, '')
+    .trim();
 
   if (lowerName.includes('checkpoint')) return 'Checkpoints';
   if (lowerName.includes('skill test')) return 'Skill Tests';
+  if (lowerName.includes('super homework')) return 'Super Homework';
   if (lowerName.includes('learning/practice') || lowerName.includes('practice opportunities')) {
     return 'Weekly Learning/Practice';
   }
@@ -278,6 +404,7 @@ function normalizeCategoryName(rawName: string): string | null {
   if (projectNumberMatch) return `Project ${projectNumberMatch[1]}`;
   if (lowerName.includes('final exam')) return 'Final';
   if (lowerName.includes('midterm')) return 'Midterms';
+  if (lowerName === 'final') return 'Final';
   if (lowerName.includes('exam')) return 'Exams';
   if (lowerName.includes('project')) return 'Projects';
   if (lowerName.includes('lab')) return 'Labs';
@@ -288,7 +415,6 @@ function normalizeCategoryName(rawName: string): string | null {
   if (lowerName.includes('participation')) return 'Participation';
   if (lowerName.includes('attendance')) return 'Attendance';
   if (lowerName.includes('reading')) return 'Reading';
-  if (lowerName.trim() === 'final') return 'Final';
 
   return null;
 }
@@ -300,11 +426,11 @@ function buildAssignmentMatchers(categoryName: string, rawName: string): string[
     Checkpoints: ['checkpoint'],
     Discussions: ['discussion'],
     Exams: ['exam', 'test'],
-    Final: ['final exam', 'final'],
+    Final: ['exam 02', 'exam 2', 'final exam', 'final'],
     Homework: ['homework', 'hw'],
     Labs: ['lab'],
     'Midterm Project': ['midterm project'],
-    Midterms: ['midterm'],
+    Midterms: ['exam 01', 'exam 1', 'midterm'],
     Projects: ['project'],
     Quizzes: ['quiz'],
     Reading: ['reading'],
@@ -319,7 +445,8 @@ function buildAssignmentMatchers(categoryName: string, rawName: string): string[
       'survey',
       'syllabus check',
     ],
-    'Skill Tests': ['skill test'],
+    'Skill Tests': ['exam', 'final', 'midterm', 'skill test'],
+    'Super Homework': ['super homework'],
     'Weekly Learning/Practice': [
       'assignment',
       'checkpoint',
@@ -366,6 +493,13 @@ function getDynamicAssignmentMatchers(categoryName: string): string[] {
 
 function detectDropLowestCount(text: string): number | undefined {
   const lowerText = text.toLowerCase();
+
+  const bestOutOfMatch = lowerText.match(/best\s+(\d+)\s+out\s+of\s+(\d+)/);
+  if (bestOutOfMatch) {
+    const keptCount = Number(bestOutOfMatch[1]);
+    const totalCount = Number(bestOutOfMatch[2]);
+    return Math.max(totalCount - keptCount, 0);
+  }
 
   if (!lowerText.includes('drop') && !lowerText.includes('dropped')) {
     return undefined;

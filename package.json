@@ -7,8 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "vitest run",
     "preview": "vite preview",
-    "package": "npm run build && cd dist && zip -r ../ucsd-grade-dashboard.zip ."
+    "package": "npm run build && cd dist && zip -FS -r ../ucsd-grade-dashboard.zip . -x '.vite/*'"
   },
   "dependencies": {
     "react": "^19.2.0",
@@ -28,6 +29,7 @@
     "globals": "^16.5.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
-    "vite": "^5.4.21"
+    "vite": "^5.4.21",
+    "vitest": "^4.1.9"
   }
 }

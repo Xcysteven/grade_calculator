@@ -5,8 +5,12 @@ import {
   calculateGrade,
   groupAssignmentsByCategory,
 } from './calculator';
-import { discoverCoursePolicy, type CoursePolicyResult } from './coursePolicy';
-import { getKnownCourseScheme } from './courseSchemes';
+import {
+  discoverCoursePolicy,
+  parseManualCoursePolicyText,
+  type CoursePolicyResult,
+} from './coursePolicy';
+import { getKnownCoursePolicyUrl, getKnownCourseScheme } from './courseSchemes';
 import type { Assignment, CreditStrategy, GradingScheme, WeightedStrategy } from './types';
 
 type AssignmentGroups = Record<string, Assignment[]>;
@@ -36,9 +40,66 @@ function App() {
   const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [customAssignments, setCustomAssignments] = useState<Assignment[]>([]);
   const [manualPolicyUrl, setManualPolicyUrl] = useState('');
+  const [manualPolicyText, setManualPolicyText] = useState('');
   const [policyResult, setPolicyResult] = useState<CoursePolicyResult | null>(null);
   const [policyCourse, setPolicyCourse] = useState('');
-  const [policyLoading, setPolicyLoading] = useState(false);
+  const [autoPolicyLoading, setAutoPolicyLoading] = useState(false);
+  const [manualPolicyLoading, setManualPolicyLoading] = useState(false);
+
+  const resetSimulationState = () => {
+    setDroppedAssignments({});
+    setCategoryOverrides({});
+    setScoreOverrides({});
+    setWeightOverrides({});
+    setCustomCategories([]);
+    setCustomAssignments([]);
+  };
+
+  const refreshDetectedPolicy = () => {
+    if (!selectedCourse) {
+      return;
+    }
+
+    setPolicyResult(null);
+    setPolicyCourse('');
+    setAutoPolicyLoading(true);
+    discoverCoursePolicy(selectedCourse)
+      .then((result) => {
+        setPolicyResult(result);
+        setPolicyCourse(selectedCourse);
+      })
+      .finally(() => {
+        setAutoPolicyLoading(false);
+      });
+  };
+
+  const clearSelectedCourseData = () => {
+    if (!selectedCourse) {
+      return;
+    }
+
+    const shouldClear = window.confirm(
+      `Remove stored Gradescope data for ${selectedCourse}? You can restore it by refreshing that Gradescope course page.`,
+    );
+
+    if (!shouldClear) {
+      return;
+    }
+
+    const nextCourses = { ...courses };
+    delete nextCourses[selectedCourse];
+    const nextSelectedCourse = Object.keys(nextCourses)[0] ?? '';
+
+    setCourses(nextCourses);
+    setSelectedCourse(nextSelectedCourse);
+    setPolicyResult(null);
+    setPolicyCourse('');
+    resetSimulationState();
+
+    if (canUseChromeStorage) {
+      chrome.storage.local.remove(selectedCourse);
+    }
+  };
 
   useEffect(() => {
     if (!canUseChromeStorage) {
@@ -93,16 +154,20 @@ function App() {
       return;
     }
 
-    if (getKnownCourseScheme(selectedCourse)) {
+    if (policyCourse === selectedCourse && policyResult) {
       return;
     }
 
     let canceled = false;
-    queueMicrotask(() => {
-      if (!canceled) {
-        setPolicyLoading(true);
-      }
-    });
+    const knownScheme = getKnownCourseScheme(selectedCourse);
+
+    if (!knownScheme) {
+      queueMicrotask(() => {
+        if (!canceled) {
+          setAutoPolicyLoading(true);
+        }
+      });
+    }
 
     discoverCoursePolicy(selectedCourse)
       .then((result) => {
@@ -113,14 +178,15 @@ function App() {
       })
       .finally(() => {
         if (!canceled) {
-          setPolicyLoading(false);
+          setAutoPolicyLoading(false);
         }
       });
 
     return () => {
       canceled = true;
+      setAutoPolicyLoading(false);
     };
-  }, [courses, selectedCourse]);
+  }, [courses, policyCourse, policyResult, selectedCourse]);
 
   // Helper to render the currently selected course
   const renderSelectedCourse = () => {
@@ -128,6 +194,7 @@ function App() {
 
     const assignments = courses[selectedCourse];
     const knownScheme = getKnownCourseScheme(selectedCourse);
+    const knownPolicyUrl = getKnownCoursePolicyUrl(selectedCourse);
     const currentPolicyResult = policyCourse === selectedCourse ? policyResult : null;
     const detectedScheme = currentPolicyResult?.scheme
       ? mergePolicySchemeWithKnownScheme(currentPolicyResult.scheme, knownScheme)
@@ -214,24 +281,24 @@ function App() {
             <button
               type="button"
               className="reset-button"
-              onClick={() => {
-                setDroppedAssignments({});
-                setCategoryOverrides({});
-                setScoreOverrides({});
-                setWeightOverrides({});
-                setCustomCategories([]);
-                setCustomAssignments([]);
-                setPolicyResult(null);
-                setPolicyCourse('');
-              }}
+              onClick={resetSimulationState}
             >
               Reset simulation
+            </button>
+          )}
+          {isFullDashboard && (
+            <button
+              type="button"
+              className="danger-button"
+              onClick={clearSelectedCourseData}
+            >
+              Clear course data
             </button>
           )}
         </div>
         {isEqualWeightFallback && (
           <div className="scheme-warning">
-            {policyLoading
+            {autoPolicyLoading || manualPolicyLoading
               ? 'Detecting course policy. Current weights are temporary evenly divided estimates.'
               : 'No course policy loaded. Current weights are evenly divided estimates.'}
           </div>
@@ -245,7 +312,8 @@ function App() {
               void detectPolicy(
                 selectedCourse,
                 manualPolicyUrl,
-                setPolicyLoading,
+                manualPolicyText,
+                setManualPolicyLoading,
                 setPolicyResult,
                 setPolicyCourse,
               );
@@ -256,22 +324,30 @@ function App() {
               onChange={(event) => setManualPolicyUrl(event.target.value)}
               placeholder="Optional syllabus URL"
             />
-            <button type="submit" disabled={policyLoading}>
-              {policyLoading ? 'Detecting...' : 'Detect policy'}
+            <textarea
+              value={manualPolicyText}
+              onChange={(event) => setManualPolicyText(event.target.value)}
+              placeholder="Optional pasted syllabus grading section"
+              rows={4}
+            />
+            <button type="submit" disabled={manualPolicyLoading}>
+              {manualPolicyLoading ? 'Detecting...' : 'Detect policy'}
             </button>
           </form>
-          {currentPolicyResult && (
+          {(currentPolicyResult || knownPolicyUrl) && (
             <div className="policy-status">
               <strong>
-                {currentPolicyResult.scheme ? 'Detected policy' : 'Policy not detected'}
+                {currentPolicyResult
+                  ? formatPolicyStatusTitle(currentPolicyResult, knownScheme)
+                  : 'Using known fallback policy'}
               </strong>
               <span>
-                {currentPolicyResult.url ?? 'No matching policy URL'} | confidence {(currentPolicyResult.confidence * 100).toFixed(0)}%
+                {formatPolicySourceLine(currentPolicyResult, knownPolicyUrl, autoPolicyLoading)}
               </span>
-              {currentPolicyResult.warnings.slice(0, 3).map((warning) => (
+              {currentPolicyResult?.warnings.slice(0, 3).map((warning) => (
                 <p key={warning}>{warning}</p>
               ))}
-              {currentPolicyResult.attemptedUrls.length > 0 && (
+              {currentPolicyResult && currentPolicyResult.attemptedUrls.length > 0 && (
                 <details>
                   <summary>Attempted URLs</summary>
                   <ul>
@@ -281,6 +357,15 @@ function App() {
                   </ul>
                 </details>
               )}
+              <div className="policy-status-actions">
+                <button
+                  type="button"
+                  onClick={refreshDetectedPolicy}
+                  disabled={autoPolicyLoading}
+                >
+                  {autoPolicyLoading ? 'Refreshing...' : 'Refresh auto policy'}
+                </button>
+              </div>
             </div>
           )}
           <form
@@ -493,13 +578,9 @@ function App() {
             value={selectedCourse}
             onChange={(e) => {
               setSelectedCourse(e.target.value);
-              setDroppedAssignments({});
-              setCategoryOverrides({});
-              setScoreOverrides({});
-              setWeightOverrides({});
-              setCustomCategories([]);
-              setCustomAssignments([]);
+              resetSimulationState();
               setPolicyResult(null);
+              setPolicyCourse('');
             }}
           >
             {Object.keys(courses).map(name => (
@@ -550,6 +631,30 @@ function getEffectiveDashboardTheme(
   return preference === 'auto' ? systemTheme : preference;
 }
 
+function formatPolicyStatusTitle(
+  policyResult: CoursePolicyResult,
+  knownScheme?: GradingScheme,
+): string {
+  if (policyResult.scheme) {
+    return 'Detected policy';
+  }
+
+  return knownScheme ? 'Using known fallback policy' : 'Policy not detected';
+}
+
+function formatPolicySourceLine(
+  policyResult: CoursePolicyResult | null,
+  knownPolicyUrl: string | undefined,
+  autoPolicyLoading: boolean,
+): string {
+  if (policyResult) {
+    return `${policyResult.url ?? knownPolicyUrl ?? 'No matching policy URL'} | confidence ${(policyResult.confidence * 100).toFixed(0)}%`;
+  }
+
+  const detectionText = autoPolicyLoading ? ' | automatic detection running' : '';
+  return `${knownPolicyUrl ?? 'No matching policy URL'} | fallback source${detectionText}`;
+}
+
 function openFullDashboard(): void {
   const fullDashboardPath = 'index.html?view=full';
   const fullDashboardUrl = typeof chrome !== 'undefined' && chrome.runtime
@@ -562,6 +667,7 @@ function openFullDashboard(): void {
 async function detectPolicy(
   selectedCourse: string,
   manualPolicyUrl: string,
+  manualPolicyText: string,
   setPolicyLoading: Dispatch<SetStateAction<boolean>>,
   setPolicyResult: Dispatch<SetStateAction<CoursePolicyResult | null>>,
   setPolicyCourse: Dispatch<SetStateAction<string>>,
@@ -570,7 +676,10 @@ async function detectPolicy(
   setPolicyCourse(selectedCourse);
 
   try {
-    const result = await discoverCoursePolicy(selectedCourse, manualPolicyUrl.trim() || undefined);
+    const trimmedPolicyText = manualPolicyText.trim();
+    const result = trimmedPolicyText
+      ? parseManualCoursePolicyText(trimmedPolicyText)
+      : await discoverCoursePolicy(selectedCourse, manualPolicyUrl.trim() || undefined);
     setPolicyResult(result);
   } finally {
     setPolicyLoading(false);

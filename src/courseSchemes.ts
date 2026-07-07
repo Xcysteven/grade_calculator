@@ -71,6 +71,20 @@ export function getKnownCourseScheme(courseName: string): GradingScheme | undefi
   return undefined;
 }
 
+export function getKnownCoursePolicyUrl(courseName: string): string | undefined {
+  const courseCode = extractDscCourseCode(courseName);
+
+  if (courseCode === 'dsc20') {
+    return 'https://dsc20.org/syllabus/';
+  }
+
+  if (courseCode === 'dsc80') {
+    return 'https://dsc80.com/syllabus/';
+  }
+
+  return undefined;
+}
+
 function extractDscCourseCode(courseName: string): string | null {
   const match = courseName
     .toLowerCase()
